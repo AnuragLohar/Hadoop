@@ -1,0 +1,307 @@
+Sqoop
+
+Install Cloudera First
+
+AWS
+- Ec2
+- Instances
+- Launch Instances
+- Ubuntu 16
+- T2.2Xlarge
+- Storage : 100gb
+- Name tag : cm
+- Security group : Default (all traffic : my ip)
+- Configure and Launch
+- Launch
+
+
+Terminal
+
+SSH in to the instance you created 
+- ssh -i ubuntu.pem ubuntu@34.224.15.82
+
+Update the server 
+- sudo apt-get update && sudo apt-get dist-upgrade -y
+
+Disable transparent huge pages
+- sudo nano /etc/rc.local
+Add these lines:
+if test -f /sys/kernel/mm/transparent_hugepage/enabled; then
+    echo never > /sys/kernel/mm/transparent_hugepage/enabled
+fi
+
+if test -f /sys/kernel/mm/transparent_hugepage/defrag; then
+    echo never > /sys/kernel/mm/transparent_hugepage/defrag
+fi
+- sudo -i
+- source /etc/rc.local 
+ 
+Install NTP
+- sudo apt-get install ntp -y
+
+Set Swappiness
+- sudo sysctl vm.swappiness=1
+
+Note : Now, save the instance to an image, call it “Cloudera Manager” Make sure to 
+check “No reboot”
+
+AWS
+- EC2
+- Instances
+- Action
+- Create Image
+- Cloudera 
+- Select no REBOOT
+- Create Image
+- Launch
+- t2.2Xlarge
+- Configure
+- 2
+- Advance Details
+(
+#!bin/bash
+sudo sysctl vm.swappiness=1
+)
+- Next
+- Next
+- Security group
+- Default
+- Launch
+
+
+For Worker Node
+- Launch Image
+- t2.large
+- Configure
+- 3
+- Advance Details
+(
+#!bin/bash
+sudo sysctl vm.swappiness=1
+)
+- Next
+- Next
+- Security group
+- Default
+- Launch
+
+Install and start CM 
+SSH into cloudera-manager host
+- wget http://archive.cloudera.com/cm5/installer/latest/cloudera-manager-installer.bin
+- chmod u+x cloudera-manager-installer.bin
+- sudo ./cloudera-manager-installer.bin
+- NEXT
+- NEXT
+- Yes
+- Next
+- Yes
+- OK
+- OK
+
+## in browser "public_ip_of_cm:7180" 
+18.210.15.5:7180
+username : admin
+password : admin 
+
+- Accept
+- Continue
+- Yes
+- Continue
+- Continue
+- Copy private DNS of 6
+- Search
+- Continue
+- Cluster Installation
+- Continue
+- Install
+- Continue
+- Continue
+
+In Enter Login Credentials
+- Login To All Hosts As: 
+	- ubuntu
+- Authentication Method:
+	- all user accept same private key
+- Private Key File:
+	- upload private key 
+- Continue
+- Continue
+- Continue
+- Finish
+
+In Cluster Setup
+- Core Hadoop
+- Continue
+
+In Assign Roles
+(Balance Roles between 3 Masters)
+
+- On 2nd Master
+Add following Roles and Remove them From 1st master
+- Hue
+- Oozie
+- Zookeeper
+
+- On 3rd Master
+Add following Roles and Remove them From 1st master
+- Cloudera Management Service add on 3rd master
+- Zookeeper
+
+- Zookeeper must run on all three nodes
+
+- Continue
+- Test Connection
+- Continue
+
+In Cluster Setup
+- HDFS Block Size = 256MB
+- Continue
+- Continue
+- Finish
+
+
+
+
+
+Import
+Hadoop
+
+
+
+
+RDBMS
+
+
+Export
+                      MySQl                                            Hive
+                      Oracle                                             Hbase
+                      Hbase                                                     
+                      Mario-Db
+
+Aws
+- Ubuntu 16
+- T2.medium
+- Next
+- 20Gb
+- MySQl
+- Default Security
+- Next
+- Launch
+
+Terminal
+- ssh -i prati.pem ubuntu@ip
+
+Update System
+- sudo apt-get update
+
+Install database to import data
+- sudo apt-get install mysql-server -y
+- root
+
+Download sample database
+- wget http://www.mysqltutorial.org/wp-content/uploads/2018/03/mysqlsampledatabase.zip
+- ls
+Shows: mysqlsampledatabase.zip
+- sudo apt install zip
+- y
+- unzip mysqlsampledatabase.zip
+
+Load sample data to database
+- mysql -u root -p <mysqlsampledatabase.sql
+- root
+- mysql -u root -p
+- root
+- mysql>show databases;
+- use classicmodels;
+Shows: Database changed
+mysql> show tables;
++-------------------------+
+| Tables_in_classicmodels |
++-------------------------+
+| customers               |
+| employees               |
+| offices                 |
+| orderdetails            |
+| orders                  |
+| payments                |
+| productlines            |
+| products                |
++-------------------------+
+8 rows in set (0.00 sec)
+- exit
+
+Change bind address of database
+because MySQL is running on different node and Cloudera Cluster is on different node.
+Set it to private ip of MySQL
+
+- cd /etc/mysql/mysql.conf.d/
+
+- ls
+Shows: mysqld.cnf  mysqld_safe_syslog.cnf
+
+- sudo nano mysqld.cnf
+	bind address = <private-ip of db>
+	save & exit
+
+- sudo service mysql restart
+
+Create a user for sqoop
+- mysql -u root -p
+- mysql> create user 'sqoopuser'@'%' identified by 'password';
+CREATE USER 'sqoopuser'@'%' IDENTIFIED BY 'password';
+- mysql> grant all privileges on *.* to 'sqoopuser'@'%';
+- exit
+
+Sqoop 
+- Log in to one of the datanodes
+- ssh -i prati.pem ubuntu@ip
+- sqoop help
+
+Install driver
+- sudo apt-get install libmysql-java
+
+Check connection to database
+- sqoop list-databases --connect jdbc:mysql://ip-172-31-79-238.ec2.internal:3306/ --username sqoopuser -P
+sqoop list-databases --connect jdbc:mysql://ip-172-31-79-238.ec2.internal:3306/ -- username  sqoopuser -P
+
+- sqoop list-tables --connect jdbc:mysql:/ip-172-31-79-238.ec2.internal:3306/classicmodels --username sqoopuser -P
+sqoop list-tables --connect jdbc:mysql://ip-172-31-79-238.ec2.internal:3306/classicmodels --username sqoopuser -P
+
+sqoop list-tables --connect jdbc:mysql://ip-172-31-79-238.ec2.internal:3306/classicmodels --username sqoopuser -P
+
+
+-----*** Sqoop Import ***-----
+
+sqoop import --connect jdbc:mysql://ip-172-31-79-238.ec2.internal:3306/classicmodels --username sqoopuser --password password --table employees -m 1
+
+sqoop import --connect jdbc:mysql://ip-172-31-79-238.ec2.internal:3306/classicmodels --username sqoopuser --password password --table employees -m 1 --target-dir /user/hdfs/new/
+
+sqoop import --connect jdbc:mysql://ip-172-31-79-238.ec2.internal:3306/classicmodels --username sqoopuser --password password --table employees --create-hive-table --hive-import --target-dir /user/hdfs/emphive/
+
+sqoop import --connect jdbc:mysql://ip-172-31-79-238.ec2.internal:3306/classicmodels --username sqoopuser --password password --table employees --create-hive-table --hive-import --target-dir /user/hdfs/emphive/
+
+
+-----*** Sqoop Export ***-----
+
+## NOTE : It is mandatory that the table to be exported is created manually and is present in the database from where it has to be exported.
+
+### Create table in destination database
+
+mysql -u root -p
+
+mysql>use classicmodels;
+
+mysql>create table export like employees;
+
+
+
+###
+
+sqoop export --connect jdbc:mysql://<database_dns>:3306/classicmodels --username sqoopuser --password password --table export --export-dir /user/hdfs/employees/
+
+
+### Check data in database
+
+mysql -u root -p
+
+mysql> select * from export;
