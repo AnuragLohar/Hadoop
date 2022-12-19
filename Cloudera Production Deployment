@@ -1,0 +1,884 @@
+Cloudera Production Deployment
+
+Three ways of deploying cloudera :
+1. Path A : CM Installation : Latest version of CM is always deployed. For learning and testing path A is recommended. 
+
+Difference between B & C
+some services need Database like CM, Hive, Hue, RM, Ozzie.
+The Path A deploys database PostgreSQL in embedded way. Which is not consider a good thing. Because it uses only one process. The moment it reaches terabytes it crashes.
+We need to make configure external database. It needs to run as a different Demon.
+
+2. Path B : Partially Automated
+3. Path C : Complete Command Line
+
+Path B is Popular. 
+
+For Path B we need to configure external database. We are going to select MYSQL. 
+It is Cloudera recommend. It is oldest. Consider as most stable.
+
+Company consider in production deployment 
+- Big data system are back end technology. They are in private network. We never make them publically accessible.
+
+
+
+
+Edge / Gateway
+Data Node
+Node Manager
+Name Node
+Resource Manager
+Cloudera Management Service
+Data Node
+Node Manager
+Data Node
+Node Manager
+Public
+Private
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Utility Node: Non Hadoop node. (like we put Cloudera Management Services (CMS) on one node that node is utility node)
+
+On Edge/Gateway Node following services run :
+- CM - Hue
+- Flume Agent
+- Sqoop Agent
+- Streamset
+- hive kafka spark Gateway
+- HDFS client (Read / Write)
+- Yarn Client (Job)
+
+According to Cloudera Edge and Gateway are same.
+But according to hortonworks Edge and Gateway is different. 
+
+According to hortonworks Gateway are:
+- hive kafka spark Gateway
+- HDFS client (Read / Write)
+- Yarn Client (Job)
+- Flume Agent
+- Sqoop Agent
+
+According to hortonworks on Edge node can run:
+- CM
+- Data Node
+
+Q> What is the difference between  Edge and Gateway
+Ans: According to Cloudera Edge and Gateway are same. But as in Hortonworks perspective it is different. As we are doing project in Cloudera we are following clouderas perspective.
+
+
+Cloudera production deployment
+
+VPC
+
+- Amazon
+- VPC
+- Elastic IP
+- Allocate elastic IP Address
+- Allocate
+- Done
+
+- VPC Dashboard
+- Launch VPC  Wizard
+- Select
+- Click on VPC with Public and Private Subnets
+- VPC name: myvpc
+- Availability Zone : us-east-1c
+- Availability Zone : us-east-1d
+- Elastic IP Allocation ID : click and select
+- Create VPC
+- Ok
+
+- Your VPC
+-  You can see your vpc here
+
+- Subnet
+- Select Public Subnet
+- Action
+- Modify auto assign settings
+- Enable auto assign
+- Save
+
+Configure a Security Group
+
+- Security Group
+- My VPC (The one who's having long ID)
+- Inbound Rules
+- Edit Inbound Rules
+- Add rule :
+	all traffic : my IP
+- Add rule :
+	all traffic : private-subnet-cidr/24
+	all traffic : 10.0.1.0/24
+check under subnet (private sub net IPv4 cider range)
+it is to give edge/gateway firewall
+- Save
+
+Create Another Security Group (allowing communication only from edge)
+- Create Security Group
+- Security Group Name : Private_Subnet_Security
+- Description: for private subnet
+- VPC : Select myvpc
+-  Click on Inbound Rules
+-  Add rule :
+	all traffic : default (sg-01156e9b54cee0c8f)
+	all traffic : private-subnet-cidr/24(10.0.1.0/24}
+- Create Security Group
+
+To Check
+Click on Security Groups
+
+In Companies stable version is used and it is in odd number.
+
+EC2
+
+- Amazon
+- EC2
+- Launch Instances
+- CommunityAMI’s
+- Search ubuntu 14
+- Select ubuntu 14 trustee version 2019
+- m4.xlarge
+- Configuration Detail
+	Network : Select myvpc
+- Review and launch
+- Storage
+	Select : 100GB 
+- Name tag : Edge Node(CM)
+- Security Group : Select existing security group
+	Select : Select Default
+- Review and launch
+-  Launch
+- Key
+- Launch Instances
+
+Terminal
+- ssh -i prati.pem ubuntu@ip
+
+Update the server 
+- sudo apt-get update && sudo apt-get dist-upgrade -y
+
+Disable transparent huge pages
+- sudo nano /etc/rc.local
+
+-Add these lines:
+
+if test -f /sys/kernel/mm/transparent_hugepage/enabled; then
+    echo never > /sys/kernel/mm/transparent_hugepage/enabled
+fi
+
+if test -f /sys/kernel/mm/transparent_hugepage/defrag; then
+    echo never > /sys/kernel/mm/transparent_hugepage/defrag
+fi
+
+- sudo -i
+- source /etc/rc.local 
+
+Install NTP 
+- sudo apt-get install ntp -y 
+
+Set Swappiness
+- sudo sysctl vm.swappiness=1
+
+Setting root reserved space
+- sudo lsblk
+Shows Disk Name
+NAME    MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT
+xvda    202:0    0   100G  0 disk 
+└─xvda1 202:1    0   100G  0 part /
+
+- sudo tune2fs -l /dev/xvda1
+
+- sudo tune2fs -l /dev/xvda1 | egrep "Block count|Reserved block count"
+Shows: 
+Block count:              26212055
+Reserved block count:     1069295
+
+IMP Command
+How to set root command to 1
+- sudo tune2fs -m 1 /dev/xvda1
+Shows: Setting reserved blocks percentage to 1% (262120 blocks)
+We use grep command because its hard to find manually
+
+- sudo tune2fs -l /dev/xvda1 | egrep "Block count|Reserved block count" 
+Shows:
+Block count:              26212055
+Reserved block count:     262120
+The  Reserve block count is now changed 
+ 
+Amazon
+- Action
+- Create Image
+- Name :Cloudera
+- Description : Prod
+- Select no Reboot
+- Create Image
+
+We are going to Start CM on edge node
+We are not going to install CM through installer bin. Will going to install it through apt-get command. So we need to set repository to Linux Level. So that we can use apt-get package. 
+
+For Master Nodes
+- Launch
+- m4.xlarge
+- 3
+-  VPC : myvpc
+	Subnet : private subnet
+-  At last
+#!bin/bash
+sudo sysctl vm.swappiness=1
+-  Review and Launch
+-  Next
+-  Next
+- Configure Security Group : Select an Existing security group
+	Select : Privte_Subnet_Security
+- Review and launch
+-  Launch
+- Key
+- Launch Instances
+
+For Worker Node
+- Launch
+- m4.large
+- 3
+-  VPC : myvpc
+	Subnet : private subnet
+-  At last
+#!bin/bash
+sudo sysctl vm.swappiness=1
+-  Review and Launch
+-  Next
+-  Next
+- Configure Security Group : Select an Existing security group
+	Select : Privte_Subnet_Security
+- Review and launch
+- Launch
+- Key
+- Launch Instances
+
+Terminal 
+On Edge Node
+
+Preparing external database for cloudera
+
+Install MySQL 
+- sudo apt-get install mysql-server -y
+- root
+
+Stop mysql for configuratin and then start
+- sudo service mysql stop 
+- sudo service mysql status
+Shows: mysql stop/waiting
+
+Move innodb log file
+Execution Engine of MySQL : 
+1. myasiam
+2. inodb
+
+Cloudera Recommends inodb
+
+- mkdir mysqlbup
+Backup directory
+- sudo su
+- cd
+- cd /var/lib/mysql
+- ls
+- mv ib_logfile0 /home/ubuntu/mysqlbup/
+- mv ib_logfile1 /home/ubuntu/mysqlbup/
+We are moving this files so we will get fresh log files.
+- exit
+
+Edit the option file my.cnf to cloudera recommended settings
+
+- cd /etc/mysql
+- ls
+- nano my.cnf
+
+Second Terminal
+- ls
+- cd Desktop (Copy my.cnf file to desktop)
+- ls (my.cnf)
+- cp my.cnf ~
+- cd
+- ls
+- scp -i prati.pem my.cnf ubuntu@ipOfCM:~
+
+First Terminal
+- cntrl+x
+- cd /home/ubuntu/
+- ls
+- cd
+- sudo rm /etc/mysql/my.cnf
+- sudo cp /home/ubuntu/my.cnf /etc/mysql/
+- cd /etc/mysql
+- nano my.cnf
+- exit
+
+Following changes are made in original my.cnf 
+=============================================================
+#
+# The MySQL database server configuration file.
+#
+# You can copy this to one of:
+# - "/etc/mysql/my.cnf" to set global options,
+# - "~/.my.cnf" to set user-specific options.
+# 
+# One can use all long options that the program supports.
+# Run program with --help to get a list of available options and with
+# --print-defaults to see which it would actually understand and use.
+#
+# For explanations see
+# http://dev.mysql.com/doc/mysql/en/server-system-variables.html
+
+# This will be passed to all mysql clients
+# It has been reported that passwords should be enclosed with ticks/quotes
+# escpecially if they contain "#" chars...
+# Remember to edit /etc/mysql/debian.cnf when changing the socket location.
+[client]
+port		= 3306
+socket		= /var/run/mysqld/mysqld.sock
+
+# Here is entries for some specific programs
+# The following values assume you have at least 32M ram
+
+# This was formally known as [safe_mysqld]. Both versions are currently parsed.
+[mysqld_safe]
+socket		= /var/run/mysqld/mysqld.sock
+nice		= 0
+log-error=/var/log/mysqld.log
+pid-file=/var/run/mysqld/mysqld.pid
+
+sql_mode=STRICT_ALL_TABLES
+[mysqld]
+#
+# * Basic Settings
+transaction-isolation = READ-COMMITTED
+user		= mysql
+pid-file	= /var/run/mysqld/mysqld.pid
+socket		= /var/run/mysqld/mysqld.sock
+port		= 3306
+basedir		= /usr
+datadir		= /var/lib/mysql
+tmpdir		= /tmp
+lc-messages-dir	= /usr/share/mysql
+skip-external-locking
+#
+# Instead of skip-networking the default is now to listen only on
+# localhost which is more compatible and is not less secure.
+bind-address		= 127.0.0.1
+#
+# * Fine Tuning
+#
+key_buffer		= 32M
+max_allowed_packet	= 32M
+thread_stack		= 256K
+thread_cache_size       = 64
+# This replaces the startup script and checks MyISAM tables if needed
+# the first time they are touched
+myisam-recover         = BACKUP
+max_connections        = 550
+#table_cache            = 64
+#thread_concurrency     = 10
+#
+# * Query Cache Configuration
+#
+query_cache_limit	= 8M
+query_cache_size        = 64M
+query_cache_type = 1
+# * Logging and Replication
+#
+# Both location gets rotated by the cronjob.
+# Be aware that this log type is a performance killer.
+# As of 5.1 you can enable the log at runtime!
+#general_log_file        = /var/log/mysql/mysql.log
+#general_log             = 1
+#
+# Error log - should be very few entries.
+#
+log_error = /var/log/mysql/error.log
+#
+# Here you can see queries with especially long duration
+#log_slow_queries	= /var/log/mysql/mysql-slow.log
+#long_query_time = 2
+#log-queries-not-using-indexes
+#
+# The following can be used as easy to replay backup logs or for replication.
+# note: if you are setting up a replication slave, see README.Debian about
+#       other settings you may need to change.
+#server-id		= 1
+log_bin			= /var/lib/mysql/mysql_binary_log
+#expire_logs_days	= 10
+#max_binlog_size         = 100M
+#binlog_do_db		= include_database_name
+#binlog_ignore_db	= include_database_name
+binlog_format = mixed
+
+read_buffer_size = 2M
+read_rnd_buffer_size = 16M
+sort_buffer_size = 8M
+join_buffer_size = 8M
+# * InnoDB
+#
+# InnoDB is enabled by default with a 10MB datafile in /var/lib/mysql/.
+# Read the manual for more InnoDB related options. There are many!
+innodb_file_per_table = 1
+innodb_flush_log_at_trx_commit  = 2
+innodb_log_buffer_size = 64M
+innodb_buffer_pool_size = 4G
+innodb_thread_concurrency = 8
+innodb_flush_method = O_DIRECT
+innodb_log_file_size = 512M
+# * Security Features
+#
+# Read the manual, too, if you want chroot!
+# chroot = /var/lib/mysql/
+#
+# For generating SSL certificates I recommend the OpenSSL GUI "tinyca".
+#
+# ssl-ca=/etc/mysql/cacert.pem
+# ssl-cert=/etc/mysql/server-cert.pem
+# ssl-key=/etc/mysql/server-key.pem
+
+
+
+[mysqldump]
+quick
+quote-names
+max_allowed_packet	= 16M
+
+[mysql]
+#no-auto-rehash	# faster start of mysql but no tab completition
+
+[isamchk]
+key_buffer		= 16M
+
+#
+# * IMPORTANT: Additional settings that can override those from this file!
+#   The files must end with '.cnf', otherwise they'll be ignored.
+#
+!includedir /etc/mysql/conf.d/
+=============================================================
+
+Make mysql start on boot 
+- sudo update-rc.d mysql defaults
+
+Start mysql
+- sudo service mysql start 
+Shows: mysql start/running, process 4308
+
+Mysql secure install
+- sudo /usr/bin/mysql_secure_installation
+[...]
+Enter current password for root (enter for none): root
+OK, successfully used password, moving on...
+
+Change the root password? [Y/n] n
+ ... skipping.
+Remove anonymous users? [Y/n] y
+ ... Success!
+Disallow root login remotely? [Y/n] n
+ ... skipping.
+Remove test database and access to it? [Y/n] y
+Reload privilege tables now? [Y/n] y
+All done!  If you've completed all of the above steps, your MySQL
+installation should now be secure.
+Thanks for using MySQL!
+
+Install mysql JDBC driver 
+- sudo apt-get install libmysql-java
+
+External database is Ready now
+
+Establish Your Cloudera Manager Repository
+
+- curl https://archive.cloudera.com/cm5/ubuntu/trusty/amd64/cm/cloudera.list > cloudera-manager.list
+- ls
+(Link for cloudera manager repo url : https://www.cloudera.com/documentation/enterprise/release-notes/topics/cm_vd.html )
+
+- nano cloudera-manager.list
+Change only cloudera Managers number that is 5→5.9 and 5→5.9.3
+(change →  deb [arch=amd64] https://archive.cloudera.com/cm5/ubuntu/trusty/amd64/cm trusty-cm5.9 contrib  
+deb-src https://archive.cloudera.com/cm5/ubuntu/trusty/amd64/cm trusty-cm5.9.3 contrib)
+
+Move to linux repository location or path 
+- sudo mv cloudera-manager.list /etc/apt/sources.list.d/
+- sudo apt-get update
+it Shows GPG error Shows because its not Authenticates.
+We need to provide public key for it to authenticate. 
+
+- sudo apt-key adv --recv-key --keyserver keyserver.ubuntu.com 327574EE02A818DD
+- sudo apt-get update 
+
+Install Cloudera Manager server software
+
+Install Oracle Java Development Kit 
+- sudo apt-get install oracle-j2sdk1.7 -y
+
+Install the Cloudera Manager Server Packages
+- sudo apt-get install cloudera-manager-daemons cloudera-manager-server
+
+Setting up the Cloudera Manager Server Database
+- mysql -u root -p
+- root
+mysql>CREATE DATABASE cmdb;
+mysql> CREATE USER 'cm'@'localhost' IDENTIFIED BY 'password';
+mysql> GRANT ALL PRIVILEGES ON *.* TO 'cm'@'localhost' IDENTIFIED BY 'password' WITH GRANT OPTION;
+mysql> exit;
+
+Database is created nut tables are not created for that cloudera has given the following script.
+
+- sudo /usr/share/cmf/schema/scm_prepare_database.sh -p mysql cmdb cm password
+- root
+Shows:
+INFO  Successfully connected to database.
+All done, your SCM database is configured correctly!
+
+Start the Cloudera Manager Server 
+- sudo service cloudera-scm-server start
+Shows: 
+Starting cloudera-scm-server:  * cloudera-scm-server started
+
+IMP
+Setup custom CDH local repository/path 
+
+- cd /opt/cloudera/parcel-repo/
+
+- sudo wget http://archive.cloudera.com/cdh5/parcels/5.9/CDH-5.9.3-1.cdh5.9.3.p0.4-trusty.parcel
+
+- sudo wget http://archive.cloudera.com/cdh5/parcels/5.9/CDH-5.9.3-1.cdh5.9.3.p0.4-trusty.parcel.sha1
+(sha file hash file. Perform reverse hash function)
+
+- ls
+.sha1 shows ubuntu does not support sh1 so truncate it 
+- sudo mv CDH-5.9.3-1.cdh5.9.3.p0.4-trusty.parcel.sha1 CDH-5.9.3-1.cdh5.9.3.p0.4-trusty.parcel.sha
+
+Most imp file is this json file 
+- sudo wget http://archive.cloudera.com/cdh5/parcels/5.9/manifest.json
+check it for information
+manifest.json is important file to install parcel
+- nano manifest.json
+- ll
+
+Ownership is on hadoop change it to scm
+- sudo chown cloudera-scm:cloudera-scm CDH-5.9.3-1.cdh5.9.3.p0.4-trusty.parcel
+- sudo chown cloudera-scm:cloudera-scm CDH-5.9.3-1.cdh5.9.3.p0.4-trusty.parcel.sha
+- sudo chown cloudera-scm:cloudera-scm manifest.json
+
+(Address for CDH parcels : http://archive.cloudera.com/cdh5/parcels/)
+
+Restart Cloudera manager server 
+- sudo service cloudera-scm-server restart
+
+Login to CM web UI on 7180
+- admin
+- admin
+- Continue
+- Continue
+- Continue
+- Copy private DNS And paste
+- Search
+- Continue
+- Continue
+- Tick Oracle
+	Second tick if you want to install kerberos
+- Continue
+-  Cluster Installation
+	Another User : ubuntu
+	Authentication Method : All hosts accept same private key : upload
+- Continue
+- Continue
+- Finish
+
+- Core Hadoop
+- Continue
+-  View by Host
+
+Edge Node /
+1 Master Node: Gateway, HUE, 
+2 Master Node: NN, Balancer, HS2, Oozie, ZK
+3 Master Node: SNN, HMS, RM, JHS, ZK
+4 Master Node: 5 CMS, ZK
+5 Worker Node: Data Node,
+6 Worker Node: Data Node,
+7 Worker Node: Data Node,
+- Continue
+
+CM and hue are on Edge node and onEdge node we have MySQL.
+But other 6 nodes are connected to Edge node they have nodes or services like CMS, HMS and Oozie. This nodes or services are in private subnet and their database should be in private subnet. So we have to again install MySQL in this utility node.
+
+CMS works on ip and search in AWS and name it CMS (db)
+HMS works on ip and search in AWS and name it HMS
+HS2 and Oozie works on ip and search in AWS and name it HS2 and Oozie
+
+1st Terminal
+- Connect to edge node
+
+Second terminal
+- scp -i prati.pem prati.pem ubuntu@edgenodeip:~
+
+1st Terminal
+- ls -l
+- chmod 600 prati.pem
+- ssh -i prati.pem ubuntu@privateDNSofCMS
+ssh -i prati.pem ubuntu@ip-10-0-1-98.ec2.internal
+
+- yes
+
+On CMS host install MYSQL
+Install MySQL 
+- sudo apt-get install mysql-server -y
+- root
+
+Stop mysql for configuratin and then start
+- sudo service mysql stop
+Shows: mysql stop/waiting
+- sudo service mysql status
+Shows: mysql stop/waiting
+
+Move innodb log file
+- mkdir mysqlbup (Backup directory)
+- sudo su
+- cd
+- cd /var/lib/mysql
+- ls
+- mv ib_logfile0 /home/ubuntu/mysqlbup/
+- mv ib_logfile1 /home/ubuntu/mysqlbup/
+- cd
+- exit
+- exit
+- ls
+Shows:
+my.cnf  mysqlbup  prati.pem
+
+Edit the option file my.cnf to cloudera recommended settings
+
+- scp -i prati.pem my.cnf ubuntu@Privateipofcms(DB):~
+scp -i prati.pem my.cnf ubuntu@ip-10-0-1-98.ec2.internal:~
+
+- ssh -i prati.pem ubuntu@Privateipofcms
+ssh -i prati.pem ubuntu@ip-10-0-1-98.ec2.internal
+- ls
+Shows:
+my.cnf  mysqlbup
+
+- sudo su
+- sudo rm /etc/mysql/my.cnf
+- cd
+- sudo cp /home/ubuntu/my.cnf /etc/mysql/
+- exit
+
+Make mysql start on boot 
+- sudo update-rc.d mysql defaults
+
+Start mysql
+- sudo service mysql start 
+Shows: mysql start/running, process 14988
+
+Mysql secure install
+- sudo /usr/bin/mysql_secure_installation
+[...]
+Enter current password for root (enter for none): root
+OK, successfully used password, moving on...
+
+Change the root password? [Y/n] n
+ ... skipping.
+Remove anonymous users? [Y/n] y
+ ... Success!
+Disallow root login remotely? [Y/n] n
+ ... skipping.
+Remove test database and access to it? [Y/n] y
+Reload privilege tables now? [Y/n] y
+All done!  If you've completed all of the above steps, your MySQL
+installation should now be secure.
+Thanks for using MySQL!
+
+
+Install mysql JDBC driver 
+- sudo apt-get install libmysql-java
+
+Cloudera Setup : DatabaseSetup
+Hue has same database as Cloudera Managers.
+For Hive, reports Manager and Oozie we created db in private subnet.
+Oozie and HS2 are running on One Node.
+So HMS→MySQL
+     Oozie→MySQL Connection
+So there is one configuration we need to change
+
+- cd /etc/mysql/
+- ll
+- sudo nano my.cnf
+- Search property of bind address and change
+bind-address	= Privateipofcms
+- save
+- exit
+
+What is bind address ?
+Suppose there is my SQL server. Multiple Clients wants to connect to MySQL server. The clients can connect to server through bind address. 
+This address is now localhost.
+We have to change it to private network
+
+- cd
+- sudo service mysql restart
+Shows:
+mysql stop/waiting
+mysql start/running, process 20227
+
+- mysql -u root -p
+- root
+
+For reports manager create DB
+- mysql> create database rman DEFAULT CHARACTER SET utf8;
+
+- mysql> CREATE USER 'rman'@'<pri-dns-of-CMS>' IDENTIFIED BY 'password';
+(Note : Enter pri-dns of host where the particular service is running)
+
+
+- mysql> grant all on rman.* TO 'rman'@'<pri-dns-of-CMS>' IDENTIFIED BY 'password';
+
+For Hive create DB
+
+- mysql> create database metastore DEFAULT CHARACTER SET utf8;
+
+- mysql> CREATE USER 'hive'@'<pri-dns-of-HMS>' IDENTIFIED BY 'password';
+
+- mysql> grant all on metastore.* TO 'hive'@'<pri-dns-of-HMS>' IDENTIFIED BY 'password';
+
+For Oozie create DB
+
+- mysql> create database oozie default character set utf8;
+
+- mysql> CREATE USER 'oozie'@'<pri-dns-of-oozie>' IDENTIFIED BY 'password';
+
+- mysql> grant all privileges on oozie.* to 'oozie'@'<pri-dns-of-oozie>' identified by 'password';
+
+- exit
+
+Add mysql driver jar
+- sudo cp /usr/share/java/mysql-connector-java-5.1.28.jar /opt/cloudera/parcels/CDH/lib/oozie/lib/
+
+For Hue you have to do configuration on CM host
+- exit
+- Check if on CM host
+- sudo su
+- cd /etc/mysql
+- nano my.cnf
+...
+bind-address	= 0.0.0.0
+
+- exit
+- sudo service mysql restart
+- mysql -u root -p
+
+- mysql> create database hue default character set utf8 default collate utf8_general_ci;
+
+- mysql> CREATE USER 'hue'@'<pri-dns-of-hue>' IDENTIFIED BY 'password';
+
+- mysql> grant all on hue.* to 'hue'@'<pri-dns-of-hue>' identified by 'password';
+
+- Exit
+
+Install Mysql jdbc jar on hosts where services are running
+Connect to Oozie host
+
+- ssh -i prati.pem ubuntu@privateipofoozie
+- sudo apt-get install libmysql-java
+
+- sudo cp /usr/share/java/mysql-connector-java-5.1.28.jar /opt/cloudera/parcels/CDH/lib/oozie/lib/
+
+- exit
+
+On HMS host
+- ssh -i prati.pem ubuntu@privateipofHMS
+- sudo apt-get install libmysql-java
+- exit
+
+Cloudera 
+Cluster Setup
+Database Setup
+
+Reports Manager, Oozie and Hive are running on different node so Change DNS
+
+Hive
+Database Host Name : Change DNS (Running on CMS so copy DNS of CMS)
+Database Name: Metastore
+Username: hive
+password: password
+
+Hue
+Database Host Name :
+Database Name: hue
+Username: hue
+password: password
+
+Reports Manager
+Database Host Name : Change DNS (Running on CMS so copy DNS of CMS)
+Database Name: rman
+Username: rman
+password: password
+
+Oozie Server
+Database Host Name :Change DNS (Running on CMS so copy DNS of CMS)
+Database Name: oozie
+Username: oozie
+password: password
+
+- Continue
+- 256 mb
+- Continue
+- Continue
+- Finish
+
+Terminal
+- Connect to edge node
+- hdfs dfs -mkdir /data
+error means Client Configuration is not setup
+
+Cloudera
+- HDFS
+- Instances
+- Select add role instances
+- Gateway
+- Select Host : Edge node
+- Continue
+
+- Yarn
+- Instances
+- Select add role instances
+- Gateway
+- Select Host : Edge node
+- Continue
+
+- Restart
+- Deploy Client Configuration
+- Finish
+
+- Termial
+- Connect to edge node
+- hdfs dfs -mkdir /data
+
+We will Read and Write from Edge node only
+
+Run a test job
+- yarn jar /opt/cloudera/parcels/CDH/lib/hadoop-mapreduce/hadoop-mapreduce-examples.jar pi 10 100 
+
+Set up Jumper node to access web UI of daemons
+Configure on jumper node 
+jumper node starts in public subnet. Its not part of cluster.
+With Jumper you can access it on windows browser private_ip:DNS you can access web ui.
