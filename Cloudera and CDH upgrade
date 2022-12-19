@@ -1,0 +1,569 @@
+Cloudera Upgrade
+
+Upgrade is perform on Both 
+1. Cloudera Manager
+2. CDH
+They both have versions. 
+While upgrading always remember that cloudera version must be Greater or Eqval to CDH version.
+
+
+First we need to upgrade CDH 5.7.6
+VPC
+- Amazon
+- VPC
+- Elastic IP
+- Allocate elastic IP Address
+- Allocate
+- Done
+
+- VPC Dashboard
+- Launch VPC  Wizard
+- Select
+- VPC name: myvpc
+- Availability Zone : us-east-1c 
+-  Availability Zone : us-east-1d
+- Elastic IP Allocation ID : click and select
+- Create VPC
+- Ok
+
+- Your VPC
+-  You can see your vpc here
+
+- Subnet
+- Select Public Subnet
+- Action
+- Modify auto assign settings
+- Enable auto assign
+- Save
+
+Configure a Security Group
+
+- Security Group
+- My VPC (The one who's having long ID)
+- Inbound Rules
+- Edit Inbound Rules
+- Add rule :
+	all traffic : my IP
+-  Add rule :
+	all traffic : private-subnet-cidr/24
+	all traffic : 10.0.1.0/24
+check under subnet (private sub net IPv4 cider range)
+it is to give edge/gateway firewall
+- Save
+
+Create Another Security Group (allowing communication only from edge)
+- Create Security Group
+- Security Group Name : Private_Subnet_Security
+- Description: for private subnet
+- VPC : Select myvpc
+-  Inbound Rules : All traffic : default
+			0.0.0.0/ 0 delete
+-  Add rule :
+	all traffic : private-subnet-cidr/24
+	all traffic : 10.0.1.0/24
+- Create Security Group
+
+To Check
+Click on Security Groups
+
+In Companies stable version is used and it is in odd number.
+
+EC2
+- Amazon
+- EC2
+- Launch Instances
+- CommunityAMI’s
+- Search ubuntu 14
+- Select ubuntu 14 Server LTE
+- t2.2xlarge or m4.xlarge
+- Select spot instance if available
+- Configuration Detail
+	Network : Select myvpc
+- Review and launch
+- Storage
+	Select : 100GB 
+- Name tag : CM
+- Security Group : Select existing security group
+	Select : Select Default
+- Review and launch
+-  Launch
+- Key
+- Launch Instances
+
+Terminal
+- ssh -i prati.pem ubuntu@ip
+
+Update the server 
+- sudo apt-get update && sudo apt-get dist-upgrade -y
+
+Disable transparent huge pages
+- sudo nano /etc/rc.local
+
+-Add these lines:
+
+if test -f /sys/kernel/mm/transparent_hugepage/enabled; then
+    echo never > /sys/kernel/mm/transparent_hugepage/enabled
+fi
+
+if test -f /sys/kernel/mm/transparent_hugepage/defrag; then
+    echo never > /sys/kernel/mm/transparent_hugepage/defrag
+fi
+
+- sudo -i
+- source /etc/rc.local 
+
+Install NTP 
+- sudo apt-get install ntp -y 
+
+Set Swappiness
+- sudo sysctl vm.swappiness=1
+
+How to set root command to 1
+- sudo tune2fs -m 1 /dev/xvda1
+
+ Amazon
+- Action
+- Create Image
+- Name : Cloudera Upgrade
+- Select no Reboot
+- Create Image
+
+For Master Nodes
+- Launch
+- t2.2xlarge or m4.xlarge
+- 5 
+-  VPC : myvpc
+	Subnet : private subnet
+-  At last
+#!bin/bash
+sudo sysctl vm.swappiness=1
+-  Review and Launch
+- Add Storage :100GB
+-  Next
+-  Next
+- Configure Security Group : Select an Existing security group
+	Select : Default
+- Review and launch
+-  Launch
+- Key
+- Launch Instances
+
+Cloudera Manager Upgrade (5.7 to 5.9)
+
+- curl https://archive.cloudera.com/cm5/ubuntu/trusty/amd64/cm/cloudera.list > cloudera-manager.list
+
+- nano cloudera-manager.list
+(change >>  deb https://archive.cloudera.com/cm5/ubuntu/lucid/amd64/cm trusty-cm5 contrib to deb https://archive.cloudera.com/cm5/ubuntu/lucid/amd64/cm trusty-cm5.9.3 contrib)
+
+- sudo mv cloudera-manager.list /etc/apt/sources.list.d/
+
+- sudo apt-key adv --recv-key --keyserver keyserver.ubuntu.com 327574EE02A818DD
+
+- sudo apt-get update
+
+Install Oracle java
+- sudo apt-get install oracle-j2sdk1.7 -y
+
+Install CM server
+- sudo apt-get install cloudera-manager-daemons cloudera-manager-server
+
+Start the embedded db
+- sudo apt-get install cloudera-manager-server-db-2
+
+Start db
+- sudo service cloudera-scm-server-db start
+
+Start CM server
+- sudo service cloudera-scm-server start
+
+AWS
+- Copy public ip of cm
+On Browser
+- IP:7180
+- admin
+- admin
+- Login
+- Continue
+- Continue
+- Continue
+- Copy paste private DNS
+- Search
+- Continue
+- Continue
+- Tick on Install Oracle Java
+- On below that Tick on Install java unlimited strength
+- Continue
+- Provide SSH Login
+	Another user : ubuntu 
+	All host accept same private key : upload key
+- Continue
+- Continue
+- Continue
+- Finish
+
+- Core hadoop
+- View by Host
+
+Node 1 : NN, Balancer, G, HS2, HS, S
+Node 2 : G, SM, HM, RM, ES, AP, S (utility node)
+Node 3 : SNN, G, HMS, OS, RM, JHS, S
+Node 4 : DN, G, HM
+Node 5 : DN, G, HM
+Node 6 : DN, G, HM
+
+- Ok
+- Continue
+- Test Connection
+- Continue
+- 256 MB
+- Continue
+- Continue
+- Finish
+
+- All Health Issues
+- click on ip
+
+- Cluster
+- Yarn
+- Web UI - Resource Manager
+- Refresh
+
+### After installation generate some data on cluster
+
+$ hdfs dfs -mkdir /data
+
+$  yarn jar /opt/cloudera/parcels/CDH/lib/hadoop-mapreduce/hadoop-mapreduce-examples.jar randomwriter  /data/output/
+
+
+Upgrade starts here
+
+Company gives you one month to prepare for upgrade process.
+You have to create documentation of below steps.
+
+Step 1: Collect Upgrade Information 
+
+Before starting an upgrade, collect the following information:
+
+1. Host credentials. You must have SSH access and be able to log in using a root account or an account that has password-less sudo permission.
+
+2. The version of Cloudera Manager used in your cluster. Go to Support > About.
+
+3. The version of the JDK deployed in the cluster. Go to Support > About.
+
+4. The version of CDH. The CDH version number displays next to the cluster name on the Home page.
+
+5. Whether the cluster was installed using parcels or packages. This information displays next to the CDH version on the Home page of Cloudera Manager.
+
+6. The services enabled in your cluster. Go to Clusters > Cluster name.
+
+7. Operating system type and version. Go to Hosts and click on a hostname in the list. The operating system type and version displays in the Distribution row in the Details section.
+
+
+
+Step 2: Complete Pre-Upgrade Steps
+
+Read pre-requisite documentation
+
+CDH 5 and Cloudera Manager 5 Requirements and Supported Versions (https://www.cloudera.com/documentation/enterprise/release-notes/topics/rn_consolidated_pcm.html)
+
+Cloudera Manager 5 Release Notes (https://www.cloudera.com/documentation/enterprise/release-notes/topics/rg_release_notes_cm.html)
+
+Before the upgrade started you have to make sure that your file system is healthy.
+For that
+- Connect to one datanode
+- sudo su hdfs
+- cd
+- hdfs fsck /
+- make sure that it is healthy
+- Under replicated or over replicated does not come in un healthy
+
+You have to generate report 
+- hdfs dfsadmin -report
+- You also have to take report from Cloudera Management.
+
+Step 3: Back Up Cloudera Manager Databases
+
+* Stop Cloudera management services
+(CMS → Click → Stop) 
+
+* Backup CM databases
+- Login to CM on terminal
+* To locate information about these databases (database type, hostname, and credentials): SSH to cm host
+
+- nano  /etc/cloudera-scm-server/db.properties
+shows info (Copy Pwd)
+
+# Auto-generated by initialize_embedded_db.sh
+#
+# 20180101-145145
+#
+# These are database settings for CM Manager
+#
+com.cloudera.cmf.db.type=postgresql
+com.cloudera.cmf.db.host=localhost:7432
+com.cloudera.cmf.db.name=scm
+com.cloudera.cmf.db.user=scm
+com.cloudera.cmf.db.password=hVugcmOwdO
+
+* Run backup command
+
+- sudo su
+- cd
+- pg_dump -h localhost -p 7432 -U scm > /tmp/scm_server_db_backup.$(date +%Y%m%d)
+this command is for postgresql
+- Past Password here
+
+For MySQL the command is 
+- mysql_dump -h localhost -p 7432 -U scm > /tmp/scm_server_db_backup.$(date +%Y%m%d)
+
+
+Step 4: Upgrade the JDK
+(Optional Step)
+
+* If JDK upgrade applies then perform.
+
+Upgrading to Oracle JDK 1.8 -> (https://www.cloudera.com/documentation/enterprise/5-11-x/topics/cdh_cm_upgrading_to_jdk8.html#xd_583c10bfdbd326ba-590cb1d1-149e9ca9886--7c46)
+
+
+
+
+
+Step 5: Upgrade the Cloudera Manager Server 
+
+* If your cluster is running the embedded PostgreSQL database, stop all services that are using the embedded database. These can include: Hive, Hue, Oozie, Sentry
+( Go on Services → Click on arrow → Stop)
+
+* Stop the Cloudera Management Service 
+
+* Stop Cloudera Manager Server, Database, and Agent:
+
+Note : Use the Cloudera Manager Admin Console to stop any running commands. 
+
+* On the host running the Cloudera Manager Server, stop the Cloudera Manager Server:
+- Connect to Cm
+- sudo service cloudera-scm-server stop
+
+* If you are using the embedded PostgreSQL database with Cloudera Manager, stop the database on the host where the database runs, usually the Cloudera Manager Server host:
+
+- sudo service cloudera-scm-server-db stop
+
+( Note : If you are not running the embedded database service ,
+sudo service cloudera-scm-server-db fast_stop)
+
+*If the Cloudera Manager host is also running the Cloudera Manager Agent, stop the Cloudera Manager Agent:
+
+- sudo service cloudera-scm-agent stop
+
+* Back up the following directories on the Cloudera Manager server host:
+/etc/cloudera-scm-server
+/etc/cloudera-scm-agent
+
+- mkdir cloudera-bu-dirs
+- cp -R /etc/cloudera-scm-agent/ cloudera-bu-dirs/
+- sudo cp -R /etc/cloudera-scm-server/ cloudera-bu-dirs/
+
+* Back up the current Cloudera Manager repo file /etc/apt/sources.list.d/ repo-bu/
+- mkdir repo-bu
+$-cp -R /etc/apt/sources.list.d/ repo-bu/
+
+* Download cloudera repo file
+- curl https://archive.cloudera.com/cm5/ubuntu/trusty/amd64/cm/cloudera.list > cloudera-manager.list
+- ls
+
+* Upgrade to an specific version of Cloudera Manager:
+
+- nano cloudera-manager.list
+(change >>  deb https://archive.cloudera.com/cm5/ubuntu/lucid/amd64/cm trusty-cm5 contrib to deb https://archive.cloudera.com/cm5/ubuntu/lucid/amd64/cm trusty-cm5.9.3 contrib)
+
+- sudo mv cloudera-manager.list /etc/apt/sources.list.d/
+
+* Run the following command to clean the cache directories and upgrade the software:
+
+- sudo apt-get clean
+- sudo apt-get update
+- sudo apt-get dist-upgrade
+- sudo apt-get install cloudera-manager-server cloudera-manager-daemons cloudera-manager-agent
+
+During this process, you might be prompted about your configuration file version:
+
+Configuration file `/etc/cloudera-scm-agent/config.ini'
+==> Modified (by you or by a script) since installation.
+==> Package distributor has shipped an updated version.
+
+What would you like to do about it ? Your options are:
+Y or I : install the package maintainer's version
+N or O : keep your currently-installed version
+D : show the differences between the versions
+Z : start a shell to examine the situation
+The default action is to keep your current version.
+
+You will receive a similar prompt for /etc/cloudera-scm-server/db.properties. 
+Answer N to both prompts.
+
+>> For embedded psotgre db
+- sudo apt-get install cloudera-manager-server-db-2 
+
+* Verify the version of packages installed
+-  dpkg-query -l 'cloudera-manager-*'
+
+
+Start Cloudera Manager Server.
+
+- sudo service cloudera-scm-server-db start
+- sudo service cloudera-scm-server start
+
+(Note : It will take 10-15 mins to start)
+
+* Upgrade the Cloudera Manager Agent using Cloudera Manager
+
+* Note : If you slected to install java in upgrade wizard, then after completion restart cm service
+No need
+- sudo service cloudera-scm-server restart
+
+Cludera 
+- Login
+ Upgrade through wizard
+- Select -yes
+- Continue
+- Continue
+- Tick on java
+- Tick below
+- Continue
+- User : Ubuntu
+	upload key
+- Continue
+- Continue
+- Continue
+- Finish
+- Continue
+- Continue
+- Finish
+
+
+CDH Upgrade
+
+CDH Upgrade (5.7 to 5.9)
+
+Before you begin
+
+* Read CDH5 release notes (https://www.cloudera.com/documentation/enterprise/release-notes/topics/rg_release_notes_cdh.html)
+
+* Read the Cloudera Manager 5 Release Notes. (https://www.cloudera.com/documentation/enterprise/release-notes/topics/rg_release_notes_cm.html)
+
+* Ensure java 1.7 or 1.8 is installed across cluster
+
+* Ensure that the Cloudera Manager minor version is equal to or greater than the CDH minor version
+
+* Run the Host Inspector and fix every issue.
+
+* If using security, run the Running the Security Inspector.
+
+* Run hdfs fsck / and hdfs dfsadmin -report and fix every issue.
+ 
+* Review the upgrade procedure and reserve a maintenance window with enough time allotted to perform all steps. For production clusters, Cloudera recommends allocating up to a full day maintenance window to perform the upgrade, depending on the number of hosts, the amount of experience you have with Hadoop and Linux, and the particular hardware you are using.
+
+
+Downtime : 
+1. Client Downtime (Maybe or not Down) Cloudera recommend 1 day Downtime for Client.
+2. Technical Downtime (Cluster is Down)
+Two Tpes: 1. Normal Upgrade
+2. Rolling Upgrade : Rolling word comes with HA. And with HA there is not a single point of time when whole cluster is stop.
+
+Q> Can their be a 0 Downtime ?
+Ans: If it is a rolling upgrade their will be 0 Technical Downtime. But even if it is a HA cluster cloudera recommends we should allocate 1 day Maintenance window so we ask for a 24 hours Downtime even if it was a rolling upgrade.
+
+Q> When you perform upgrade did you have any Downtime ?
+They ask for client Downtime.
+Ans: We follow cloudera documentation. So we take 1 Day Downtime
+
+* To avoid a high number of alerts during the upgrade process, you can enable maintenance mode on your cluster before you start the upgrade. This stops email alerts and SNMP traps from being sent, but does not stop checks and configuration validations. Exit maintenance mode when you have finished the upgrade to re enable Cloudera Manager alerts.
+
+- CDH Maintenance mode is : safemode
+- CM has maintenance mode.
+- CM
+- Click on arrow beside cluster name
+- Enter Maintenance mode
+
+Stop Cluster 
+* Using CM stop the cluster
+- Cluster Name
+- Click on arrow
+- Stop
+- Close
+
+Back up the HDFS Metadata on the NameNode
+- CM
+- HDFS
+- Instances
+- Copy private DNS of NN
+- Search it in aws
+- connect to it
+
+- sudo su
+- cd /dfs/nn
+For Backup
+- tar -cvf /root/nn_backup_data.tar .
+
+//skip this
+// no need we already did it
+Back up Metastore Databases
+* To locate information about these databases (database type, hostname, and credentials): SSH to cm host
+$ nano  /etc/cloudera-scm-server/db.properties
+# Auto-generated by initialize_embedded_db.sh
+#
+# 20180101-145145
+#
+# These are database settings for CM Manager
+#
+com.cloudera.cmf.db.type=postgresql
+com.cloudera.cmf.db.host=localhost:7432
+com.cloudera.cmf.db.name=scm
+com.cloudera.cmf.db.user=scm
+com.cloudera.cmf.db.password=hVugcmOwdO
+* Run backup command
+- sudo su
+- pg_dump -h localhost -p 7432 -U scm > /tmp/scm_server_db_backup.$(date +%Y%m%d)
+
+
+Run the Upgrade Wizard 
+
+* Log into the Cloudera Manager Admin console.
+* Press button beside cluster name and select -> Upgrade Cluster
+* Select parcels (If you have parcel installation)
+* Select CDH version -> 5.9.3
+
+- Click on Cm
+- Upgrade Clusters
+- Continue
+- tick Yes
+- Continue 
+- Continue
+- Continue
+- Continue
+- Continue
+- Finish
+
+* Continue through wizard…
+- Connect to worker node
+- hdfs fsck /
+
+You have to submit pre-upgrade and post upgrade reports
+
+- Exit maintenance Window from Cloudera
+- Make sure all services are sunning and green.
+
+Q> Why did you perform upgrade ? Who Took the decision ? How frequently Upgrade Happen ?
+Ans :
+Their are 3 teams involved in this
+1. Client
+2. Operations Team (Admin)
+These two never recommend upgrade. Because they want Stability.
+3. Applications Team (Developer, Data analyst/scientist)
+Client takes final decision on upgrade.
+
+Minimum Duration of upgrade is 1 Year
+
+Multiple reason behind upgrade :
+- The solution that client want can not delivered by this version.
+- If clients comes up with new request of solution and that solution can not be given on current version then we upgrade to new version.
+- Application and Operation Teams suggest according to need.
