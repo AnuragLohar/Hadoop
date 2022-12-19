@@ -1,0 +1,144 @@
+Kerberos Encryption
+
+Two things in Encryption 
+1. Encryption in Motion : SSL/TLS
+2. Encryption at Rest : Enable encryption zones. Rest data any one can see.
+
+We need keys to perform encryption.
+1. Java Based Key Store (Key Management Service (KMS) )
+2. Cloudera Navigater (Key Trustee Server (KTS) )
+
+Encryption
+
+Cloudera
+
+- Click on down arrow beside cluster name
+-  Add Service
+- Java Key Store (KMS)
+- Continue
+- Select Host (Cloudera Utensils)
+- Continue
+Setup Access Control List
+- kms
+- kms
+
+Cloudera says
+- Never enter hdfs in the ACL as user
+
+- Continue
+- Continue
+- Continue
+- Finish
+
+Q> How to add services to secured cluster or prerequisites
+Ans: On cloudera Manager we just have to add services.
+If its not cloudera then we have to create service principal of those services in KDC.
+ 
+- HDFS
+- Restart
+- Restart Sales Service
+- Finish
+
+We need to create principal for KMC user
+that we added in ACL
+
+Terminal
+
+- Connect to CM where KDC is running
+- ssh -i prati.pem ubuntu@ip
+
+- sudo kadmin.local
+- addprinc kms
+- pwd
+- pwd
+- Exit
+
+- Connect to worker node
+- ssh -i prati.pem ubuntu@ip
+- kinit -p user1
+- hadoop key list
+Shows: Cannot list keys for KeyProvider:
+
+- hadoop key create mykey
+Shows: mykey has not been created. org.apache.hadoop.security.authorize.AuthorizationException: User:user1 not allowed to do 'CREATE_KEY' on 'mykey'
+- kdestroy
+
+- su hdfs
+- cd
+- kinit -p hdfs
+- pwd
+- hadoop key list
+Shows: Cannot list keys for KeyProvider
+
+- hadoop key create mykey
+Shows : mykey has not been created. org.apache.hadoop.security.authorize.AuthorizationException: User:user1 not allowed to do 'CREATE_KEY' on 'mykey'
+- exit
+
+Create the key 
+- sudo passwd kms
+- kms
+- kms
+- su kms
+- cd
+- kinit -p kms
+- hadoop key list
+Shows: Listing keys for KeyProvider: KMSClientProvider[http://ip-172-31-62-251.ec2.internal:16000/kms/v1/]
+- hadoop key create mykey
+Shows: mykey has been successfully created
+- hadoop key list
+Shows key
+
+Create encrypted zone
+Two scenarios will be their
+1. Make already present directory zone
+2. Create dedicated directory zone 
+
+- exit (kms)
+- su hdfs
+- hdfs dfs -mkdir /zone1
+- hdfs crypto -createZone -keyName mykey -path /zone1
+Shows: added encryption zone /zone1
+
+Key will be created by the user who wants to create zone
+but the zone will be created by hdfs
+
+
+- hdfs dfs -ls /
+To check ownership is on hdfssuper group
+Shows: drwxr-xr-x   - hdfs supergroup          0 2020-08-31 10:01 /zone1
+- hdfs dfs -chown kms:kms /zone1
+- hdfs dfs -ls /
+Shows : drwxr-xr-x   - kms  kms                 0 2020-08-31 10:01 /zone1
+ownership changed
+
+try to write from hdfs to zone1
+- nano abc
+- write something
+It will show a error message
+- hdfs dfs -put abc /zone1
+It will show a error message
+
+No permission for read and write in zone
+- exit
+
+Put data in encrypted zone
+- su kms
+- pwd
+- klist
+- nano xyz
+- write data
+- hdfs dfs -put xyz /zone1
+It is able to write
+- hdfs dfs -cat /zone1/xyz
+abs
+sk
+- exit
+
+Try accessing from other user
+- su hdfs
+- pwd
+- cd
+- hdfs dfs -cat /zone1/xyz
+Not allowed
+
+You have successfully encrypted data. Even root user can not be able to see it.
