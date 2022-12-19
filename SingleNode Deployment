@@ -1,0 +1,221 @@
+Single Node
+
+Steps :
+	1. Download
+	2. Extract
+	3. Install
+	4. Configure
+	5. Deploy
+
+AWS
+- EC2
+- Launch Instance
+- Select ubuntu 16
+- Select t2 medium
+- Launch
+- Add tag (Single Node)
+- Security Group
+- Select existing
+- Default
+- Launch
+- Default
+- Inbound
+- Edit
+- Add rule
+- All traffic my ip
+- Save
+
+- Do not remove existing rule or it will stop working.
+- In company we put cider range
+
+Terminal
+- ssh -i prati.pem ubuntu@ip_add
+- yes 
+
+Install Java
+- sudo apt-get update
+- sudo apt install default-jdk -y
+To check java version
+- java -version
+
+JVM : Bytecode → run
+JRE : Support libraries to run bytecode + JVM
+JDK : Prebuild code/Development libraries + JRE
+
+Create a Hadoop user for accessing HDFS and MapReduce
+- sudo addgroup hadoop
+- sudo adduser hduser --ingroup hadoop
+Give Password : prati
+- sudo adduser hduser sudo
+- sudo su hduser
+
+when you switch user it shows ~ to get it
+localhost ip is 127.0.0.1
+
+Install SSH
+- sudo apt-get install openssh-server -y
+
+Configure SSH
+- ssh-keygen
+- Enter
+- Enter
+- Enter
+- cd .ssh
+- cat id_rsa.pub >> authorized_keys
+- ssh localhost
+- Exit
+We configured passwordless ssh configuration
+
+Disable IPV6 on private network
+
+- Hadoop 2 does not support IPV6
+- cd (Come on hduser from ssh)
+- sudo nano /etc/sysctl.conf
+- Copy paste this lines 
+net.ipv6.conf.all.disable_ipv6 = 1
+net.ipv6.conf.default.disable_ipv6 = 1
+net.ipv6.conf.lo.disable_ipv6 = 1
+To check
+- sudo sysctl -p
+
+Download Hadoop
+- wget -c https://www-us.apache.org/dist/hadoop/common/hadoop-3.3.0/hadoop-3.3.0.tar.gz
+
+tar -xzvf
+x = extract
+z = uncompressed
+f = forcefully
+
+Extract and Install Hadoop tar ball
+- tar -xzvf hadoop-3.3.0.tar.gz
+
+Move to installation location
+- sudo mv hadoop-3.3.0 /usr/local/hadoop
+
+- You use sudo so ownership goes to sudo so we have to change it and give ownership to user.
+- sudo chown hduser:hadoop -R /usr/local/hadoop
+
+Set Enviornment Variable
+- readlink -f $(which java)
+- nano .bashrc
+- Copy Paste lines
+export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+export HADOOP_HOME=/usr/local/hadoop
+export PATH=$PATH:$HADOOP_HOME/bin
+export PATH=$PATH:$HADOOP_HOME/sbin
+export PATH=$PATH:/usr/local/hadoop/bin/
+export HADOOP_MAPRED_HOME=$HADOOP_HOME
+export HADOOP_COMMON_HOME=$HADOOP_HOME
+export HADOOP_HDFS_HOME=$HADOOP_HOME
+export YARN_HOME=$HADOOP_HOME
+export HADOOP_CONF_DIR=/usr/local/hadoop/etc/hadoop
+
+- Refresh configuration so that it will come to effect
+- source .bashrc
+- cd /usr/local/hadoop/etc/hadoop/
+- ls
+
+Update hadoop-env.sh
+- nano hadoop-env.sh
+- Copy Paste
+export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+export HADOOP_LOG_DIR=/var/log/hadoop
+
+Move it to Location
+- sudo mkdir /var/log/hadoop
+Change Ownership
+- sudo chown hduser:hadoop -R /var/log/hadoop
+
+Update core-site.xml
+- nano core-site.xml
+- Copy property and Paste in between configuration
+
+<property>
+  <name>hadoop.tmp.dir</name>
+  <value>/app/hadoop/tmp</value>
+  <description>A base for other temporary directories.</description>
+ </property>
+ <property>
+  <name>fs.defaultFS</name>
+  <value>hdfs://localhost:54310</value>
+</property>
+
+- sudo mkdir -p /app/hadoop/tmp
+- sudo chown hduser:hadoop /app/hadoop/tmp
+
+Update hdfs-site.xml
+
+- Only hdfs specific configuration will be maintain in hdfs-site.xml
+
+- nano hdfs-site.xml
+- Copy and Paste property in Configuration
+<property> 
+<name>dfs.replication</name>
+  <value>1</value>
+ </property>
+ <property>
+   <name>dfs.namenode.name.dir</name>
+   <value>file:/usr/local/hadoop_store/hdfs/namenode</value>
+ </property>
+ <property>
+   <name>dfs.datanode.data.dir</name>
+   <value>file:/usr/local/hadoop_store/hdfs/datanode</value>
+ </property>
+
+- sudo mkdir -p /usr/local/hadoop_store/hdfs/namenode
+- sudo mkdir -p /usr/local/hadoop_store/hdfs/datanode
+- sudo chown -R hduser:hadoop /usr/local/hadoop_store
+
+Update yarn-site.xml
+- nano yarn-site.xml
+- Copy Paste in Configuration
+<property>
+      <name>yarn.nodemanager.aux-services</name>
+      <value>mapreduce_shuffle</value>
+   </property>
+
+Map-red is an Application
+Update mapred-site.xml
+- ls
+- cp mapred-site.xml.template mapred-site.xml
+- ls
+- nano mapred-site.xml
+- Copy & Paste in configuration
+ <property>
+  <name>mapreduce.jobtracker.address</name>
+  <value>localhost:54311</value>
+   </property>
+<property>
+   <name>mapreduce.framework.name</name>
+   <value>yarn</value>
+ </property>
+
+Format Namenode
+- hdfs namenode -format
+- start-all.sh 
+or start-dfs.sh
+- start-yarn.sh
+
+- jps (This command shows Deamons)
+
+- hdfs dfs -mkdir /user
+- hdfs dfs -mkdir /user/ubuntu
+- ls
+- hdfs dfs -put --- /user/ubuntu
+
+Namenode port number on web is 50070
+Copy Public IP
+Open new tab in browser
+- ip:50070
+- Go to utilities
+- Brows the file system
+- You can see the information
+
+hadoop jar /usr/local/hadoop/share/hadoop/mapreduce/hadoop-*examples*.jar pi 5 10
+
+<----- Troubleshooting ----->
+# if you are getting >>>  ..WARN.util.NativeCodeLoader: Unable to load native-hadoop library
+Edit the bashrc file
+nano ~/.bashrc
+export HADOOP_HOME_WARN_SUPPRESS=1
+export HADOOP_ROOT_LOGGER="WARN,DRFA"
