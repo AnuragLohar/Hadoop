@@ -29,7 +29,7 @@ AWS
 Terminal
 
 SSH in to the instance you created 
-- ssh -i prati.pem ubuntu@ip
+- ssh -i <key.pem> ubuntu@ip
 
 Update the server 
 -  sudo apt-get update && sudo apt-get dist-upgrade -y
