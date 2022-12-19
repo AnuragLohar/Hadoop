@@ -1,0 +1,77 @@
+Deploying a Hadoop cluster with EMR
+
+Elastic Map Reduce
+
+- Platform as a service from AWS
+
+- Amazon
+- Services
+- S3
+- Create Bucket
+- Untick everything
+- Create BUCKET
+- Create a logs folder in bucket
+
+- Amazon
+- Services
+- EMR
+- Create Cluster
+-  (Click Advanced options)
+
+STEP 1 
+Software and steps
+
+- Tick Hadoop and Hue
+- In Steps (Optional)
+	- After last step completes: tick on cluster autpterminate
+- Click on Steps (Optional)
+- Click on streaming program
+- add step
+- Name : streaming program
+- Mapper : elasticmapreduce/samples/wordcount/wordSplitter.py
+- Reducer : aggregate
+- Input s3 location: elasticmapreduce/samples/wordcount/input
+- Output s3 location: <bucket-name>/out1/
+- Action on Failure: Continue
+- add
+- Next
+
+STEP 2
+Hardware
+
+- Instances and Configuration : Select Uniform
+- Others keep as it is
+- Next
+
+STEP 3
+General Cluster Setting
+
+- Logging
+- Select emr test (bucket name and logs folder )
+- Untick Termination Protection
+- Next
+
+STEP 4
+Security
+
+- EC2 key pair : Select (if you want to)
+- Create Cluster
+
+- You can check in hardware
+- You can check in EC2
+	- Some instances will be started by EMR
+
+- In 5 Minutes your cluster will be ready
+
+- Amazone s3
+- Bucket
+- You can see part files
+- Make it public
+- web URI
+
+* You can create cluster in 5 minutes using EMR
+
+Q> Where EMR will be used ?
+EMR is used as platform as a service. PLATFORM AS A SERVICE IS ONE TIME PROCESSING REQUIRMENT. 
+
+Q> Benefits of EMR ?
