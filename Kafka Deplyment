@@ -1,0 +1,1024 @@
+Kafka Deployment
+
+AWS
+- EC2
+- Launch Instance
+- Ubuntu 16.04 
+(kafka dosnt run on t2 micro.)
+- t2 medium
+- Next
+- Next
+- Next
+- Add Tag = kafka1
+- select default security group
+- launch
+- view instances
+- default
+- inbound rules
+- select my ip
+
+Kafka Deployment
+terminal
+- ssh -i prati.pem ubuntu@54.208.47.117
+
+First we will setup Zookeeper Quorum
+- Zookeeper is compulsory for kafka
+
+Update and install necessary packages
+- sudo apt-get update && sudo apt-get -y install ca-certificates zip net-tools netcat
+
+( if u want to see two network are connected or not you fire ping
+but if u want to see two services are connect you use netcat command)
+
+Install java
+- sudo apt-get install default-jdk -y
+
+Send key to DC
+- on second terminal
+- scp -i prati.pem prati.pem ubuntu@ip:~/.ssh/
+(scp -i prati.pem prati.pem ubuntu@54.208.47.117:~/.ssh/)
+
+ on first terminal
+- cd .ssh
+- ls
+- ls -l
+- chmod 600 pratiksha.pem
+- cd
+
+Configure profile
+- nano .profile
+eval `ssh-agent` ssh-add /home/ubuntu/.ssh/pratiksha.pem
+- source .profile
+
+Set swappiness
+- sudo sysctl vm.swappiness=0
+echo 'vm.swappiness=1' | sudo tee --append /etc/sysctl.conf
+
+(tee similar to cat command
+this swapiness have permanant effect)
+
+Download zookeeper and kafka
+- wget https://archive.apache.org/dist/kafka/0.10.2.1/kafka_2.12-0.10.2.1.tgz
+- ls
+- tar -xzvf kafka_2.12-0.10.2.1.tgz
+- ls
+- sudo mv kafka_2.12-0.10.2.1 /usr/local/kafka
+- sudo chown ubuntu:ubuntu -R /usr/local/kafka/
+
+Configure environment variable
+- nano .bashrc
+export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
+export KAFKA_HOME=/usr/local/kafka
+export PATH=$PATH:$KAFKA_HOME/bin
+export PATH=$PATH:$KAFKA_HOME/config
+export PATH=$PATH:/usr/local/kafka/bin/
+export PATH=$PATH:/usr/local/kafka/config/
+- source .bashrc
+
+zookeeper quickstart 
+ - Quickstart mode use to check package is installed properly or not
+
+- zookeeper-server-start.sh $KAFKA_HOME/config/zookeeper.properties
+Shows : successfully bounded
+ctrl+C (To stop)
+It uses to Testing zookeeper install.(To check it works as demon or not)
+
+- zookeeper-server-start.sh -daemon /usr/local/kafka/config/zookeeper.properties
+(Zookeeper has its own cli and 2181 is port no)
+- zookeeper-shell.sh localhost:2181
+Shows: Connecting to localhost:2181
+Welcome to ZooKeeper!
+JLine support is disabled
+WATCHER::
+WatchedEvent state:SyncConnected type:None path:null
+
+- ls /
+Shows: ZooKeeper -server host:port cmd args
+	stat path [watch]
+	set path data [version]
+	ls path [watch]
+	delquota [-n|-b] path
+	ls2 path [watch]
+	setAcl path acl
+
+- ctrl+c
+zk 4 letter cmd search on google (read at least)
+ruok shows zk is on or not 
+
+- echo "ruok" | nc localhost 2181 ; echo
+Shows: imok
+(ncat use to send data to that particuler port)
+
+Configure zookeeper bootscripts
+- Custom bootscript script to make service/zk available to service cmd
+
+- sudo nano /etc/init.d/zookeeper
+Shows: Empty File
+
+(open zk file)
+(zk script is use to make service available to service cmd)
+(paste)
+
+#!/bin/bash
+#/etc/init.d/zookeeper
+DAEMON_PATH=/usr/local/kafka/bin
+DAEMON_NAME=zookeeper
+# Check that networking is up.
+#[ ${NETWORKING} = "no" ] && exit 0
+
+PATH=$PATH:$DAEMON_PATH
+
+# See how we were called.
+case "$1" in
+  start)
+        # Start daemon.
+        pid=`ps ax | grep -i 'org.apache.zookeeper' | grep -v grep | awk '{print $1}'`
+        if [ -n "$pid" ]
+          then
+            echo "Zookeeper is already running";
+        else
+          echo "Starting $DAEMON_NAME";
+          $DAEMON_PATH/zookeeper-server-start.sh -daemon /usr/local/kafka/config/zookeeper.properties
+        fi
+        ;;
+  stop)
+        echo "Shutting down $DAEMON_NAME";
+        $DAEMON_PATH/zookeeper-server-stop.sh
+        ;;
+  restart)
+        $0 stop
+        sleep 2
+        $0 start
+        ;;
+  status)
+        pid=`ps ax | grep -i 'org.apache.zookeeper' | grep -v grep | awk '{print $1}'`
+        if [ -n "$pid" ]
+          then
+          echo "Zookeeper is Running as PID: $pid"
+        else
+          echo "Zookeeper is not Running"
+        fi
+        ;;
+  *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+esac
+
+exit 0
+
+Change ownership to root
+- sudo chown root:root /etc/init.d/zookeeper
+
+Bacuse it is a script you have to give execute permission
+- sudo chmod +x /etc/init.d/zookeeper
+
+Make default system script
+- sudo update-rc.d zookeeper defaults
+Shows: insserv: warning: script 'zookeeper' missing LSB tags and overrides
+(ignore warning)
+
+Now you can use service command for zookeeper
+- sudo service zookeeper stop
+- sudo service zookeeper start
+
+Check whether it started
+(check working of services)
+- nc -vz localhost 2181
+Shows: Connection to localhost 2181 port [tcp/*] succeeded!
+
+- echo "ruok" | nc localhost 2181 ; echo
+Shows: imok
+
+Create an Image at this point and launch 2 more instances from this ami
+
+AWS
+- Ec3
+- Action 
+- Image
+- Create image
+- Name kafka
+- Select no reboot
+
+- Launch
+- t2 medium
+- select 2
+- Default security
+- select key
+- Launch
+
+Name it
+- kafka2
+- kafka3
+
+Configure hosts
+- sudo nano /etc/hosts
+(privateip privatedns zookeepr1
+privateip privatedns kaafka1 this is for one node)
+
+172.31.66.62 ip-172-31-66-62.ec2.internal zk1
+172.31.66.62 ip-172-31-66-62.ec2.internal kf1
+172.31.79.164 ip-172-31-79-164.ec2.internal zk2
+172.31.79.164 ip-172-31-79-164.ec2.internal kf2
+172.31.79.123 ip-172-31-79-123.ec2.internal zk3
+172.31.79.123 ip-172-31-79-123.ec2.internal kf3
+
+## Do this on all 3 nodes
+
+- ssh zk2
+- (shows cant be establish)
+- yes
+- sudo nano /etc/hosts
+- copy & paste ip
+- exit
+
+- ssh zk3
+- yes
+- sudo nano /etc/hosts
+- copy & paste ip
+- exit
+
+Install dsh
+- sudo apt-get install dsh -y
+- sudo nano /etc/dsh/machines.list
+
+copy & paste this
+#localhost (comment localhost)
+zk1
+zk2
+zk3
+
+- dsh -a uptime
+Shows: The authenticity of host 'zk1 (172.31.60.62)' can't be established.
+ECDSA key fingerprint is SHA256:KNAUxzl55lk2drYf6ObdJw9VKZMxlDbebcE4rHYtn7o.
+
+Are you sure you want to continue connecting (yes/no)? yes
+Warning: Permanently added 'zk1,172.31.60.62' (ECDSA) to the list of known hosts.
+ 08:10:03 up 40 min,  2 users,  load average: 0.00, 0.00, 0.00
+ 08:10:03 up 8 min,  0 users,  load average: 0.00, 0.01, 0.00
+ 08:10:03 up 8 min,  0 users,  load average: 0.00, 0.03, 0.04
+
+Start zookeeper on all nodes and check connectivity
+- dsh -a sudo service zookeeper start
+(it will start in Quoram means cluster mode)
+- nc -vz zk2 2181
+Shows:  Connection to zk2 2181 port [tcp/*] succeeded!
+- nc -vz zk3 2181
+Shows: Connection to zk3 2181 port [tcp/*] succeeded!
+
+- ssh zk2
+- nc -vz zk1 2181
+- exit
+
+Stop zookeeper server
+why are we stopping ?
+- we have to perform manual configuration
+
+- dsh -a sudo service zookeeper stop
+
+Create data dictionary for zookeeper
+- zk stores its data in data dictionary.
+
+- dsh -a sudo mkdir -p /data/zookeeper
+we used sudo to create now change ownership back to user that is ubutu
+
+- dsh -a sudo chown -R ubuntu:ubuntu /data/zookeeper/
+
+create server identity
+(we are creating file id and writing 1)
+
+- echo "1" > /data/zookeeper/myid
+- cat /data/zookeeper/myid 
+
+- ssh zk2
+- echo "2" > /data/zookeeper/myid
+- exit
+
+- ssh zk3
+- echo "3" > /data/zookeeper/myid
+- exit
+
+- dsh -a cat /data/zookeeper/myid 
+shows: 1 
+2 
+3
+
+Configure zookeeper settings
+(remove existing configuration)
+/opt/cloudera/parcel is clouderas location.
+
+- dsh -a rm /usr/local/kafka/config/zookeeper.properties
+
+Open editor to write changes
+- nano /usr/local/kafka/config/zookeeper.properties
+Shows: Empty File
+
+copy contents from file and paste
+
+# the location to store the in-memory database snapshots and, unless specified otherwise, the transaction log of updates to the database.
+dataDir=/data/zookeeper
+# the port at which the clients will connect
+clientPort=2181
+# disable the per-ip limit on the number of connections since this is a non-production config
+maxClientCnxns=0
+# the basic time unit in milliseconds used by ZooKeeper. It is used to do heartbeats and the minimum session timeout will be twice the tickTime.
+tickTime=2000
+# The number of ticks that the initial synchronization phase can take
+initLimit=10
+# The number of ticks that can pass between
+# sending a request and getting an acknowledgement
+syncLimit=5
+# zoo servers
+# these hostnames such as `zookeeper-1` come from the /etc/hosts file
+server.1=zk1:2888:3888
+server.2=zk2:2888:3888
+server.3=zk3:2888:3888
+
+save
+
+(copy this config on other 2 nodes)
+
+- scp /usr/local/kafka/config/zookeeper.properties zk2:/usr/local/kafka/config/
+Shows:  zookeeper.properties                         100%  836     0.8KB/s   00:00  
+
+- scp /usr/local/kafka/config/zookeeper.properties zk3:/usr/local/kafka/config/
+Shows: zookeeper.properties                         100%  836     0.8KB/s   00:00  
+
+Start the zookeeper service 
+- dsh -a sudo service zookeeper start
+
+verify whether started 
+- echo "ruok" | nc zk1 2181 ; echo
+Shows: imok
+- echo "ruok" | nc zk2 2181 ; echo
+Shows: imok
+- echo "ruok" | nc zk3 2181 ; echo
+Shows: imok
+- if you get error that means their is error in configuration
+
+- echo "stat" | nc zk1 2181 ; echo
+Shows: Zookeeper version: 3.4.9-1757313, built on 08/23/2016 06:50 GMT
+Clients:
+ /172.31.60.62:49068[0](queued=0,recved=1,sent=0)
+
+Latency min/avg/max: 0/0/0
+Received: 2
+Sent: 1
+Connections: 1
+Outstanding: 0
+Zxid: 0x100000000
+Mode: follower
+Node count: 4
+
+
+- echo "stat" | nc zk2 2181 ; echo
+Shows: Zookeeper version: 3.4.9-1757313, built on 08/23/2016 06:50 GMT
+Clients:
+ /172.31.60.62:52372[0](queued=0,recved=1,sent=0)
+
+Latency min/avg/max: 0/0/0
+Received: 2
+Sent: 1
+Connections: 1
+Outstanding: 0
+Zxid: 0x100000000
+Mode: leader
+Node count: 4
+
+- echo "stat" | nc zk3 2181 ; echo
+(shows some o/p from 3 and also shows which one is the leader)
+
+Kafka Deployment 
+
+for kafka 2 best pratice
+1. kafka broker should have a dedicated hdd
+2. hdd we created for kafka have xfs file system
+
+- AWS
+- EC2
+- Volume
+- (availability zones)
+- (three will already be there)
+- Create another 3
+- Create Volume
+
+- Volume Type : General Purpose SSD (gp2)
+- Size (GiB) : 10
+- availability zone check
+- Name Tag: disk 1
+
+- Volume
+Create another 1
+- Size (GiB) : 10
+- availability zone check
+- Name Tag: disk 2
+
+
+- Volume
+Create another 1
+- Size (GiB) : 10
+- availability zone check
+- Name Tag: disk 1
+- close
+
+- Action
+- Attach volume
+- Disk1 = kafka1
+- Attach
+
+- Action
+- Attach volume
+- Disk2 = kafka2
+- Attach
+
+- Action
+- Attach volume
+- Disk3 = kafka3
+- Attach
+
+Terminal
+- dsh -a sudo lsblk
+Shows:
+NAME    MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+xvda    202:0    0  100G  0 disk 
+└─xvda1 202:1    0  100G  0 part /
+xvdf    202:80   0   10G  0 disk 
+loop0     7:0    0   97M  1 loop /snap/core/9665
+loop1     7:1    0 28.1M  1 loop /snap/amazon-ssm-agent/2012
+NAME    MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+xvda    202:0    0  100G  0 disk 
+└─xvda1 202:1    0  100G  0 part /
+xvdf    202:80   0   10G  0 disk 
+loop0     7:0    0   97M  1 loop /snap/core/9665
+loop1     7:1    0 28.1M  1 loop /snap/amazon-ssm-agent/2012
+NAME    MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+xvda    202:0    0  100G  0 disk 
+└─xvda1 202:1    0  100G  0 part /
+xvdf    202:80   0   10G  0 disk 
+loop0     7:0    0 28.1M  1 loop /snap/amazon-ssm-agent/2012
+loop1     7:1    0   97M  1 loop /snap/core/9665
+
+To check data on new volume
+- dsh -a sudo file -s /dev/xvdf  
+Shows :
+/dev/xvdf: data
+/dev/xvdf: data
+/dev/xvdf: data
+
+Format it to create file system
+- dsh -a sudo apt-get install xfsprogs
+(install packages)
+
+To install file system
+- dsh -a sudo mkfs -t xfs /dev/xvdf 
+(shows information)
+
+Create dir to mount
+- dsh -a sudo mkdir /data/kafka
+- dsh -a sudo mount /dev/xvdf /data/kafka
+
+To see mounting info
+- dsh -a sudo lsblk
+Shows:
+NAME    MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+xvda    202:0    0  100G  0 disk 
+└─xvda1 202:1    0  100G  0 part /
+xvdf    202:80   0   10G  0 disk /data/kafka
+loop0     7:0    0   97M  1 loop /snap/core/9665
+loop1     7:1    0 28.1M  1 loop /snap/amazon-ssm-agent/2012
+NAME    MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+xvda    202:0    0  100G  0 disk 
+└─xvda1 202:1    0  100G  0 part /
+xvdf    202:80   0   10G  0 disk /data/kafka
+loop0     7:0    0   97M  1 loop /snap/core/9665
+loop1     7:1    0 28.1M  1 loop /snap/amazon-ssm-agent/2012
+NAME    MAJ:MIN RM  SIZE RO TYPE MOUNTPOINT
+xvda    202:0    0  100G  0 disk 
+└─xvda1 202:1    0  100G  0 part /
+xvdf    202:80   0   10G  0 disk /data/kafka
+loop0     7:0    0 28.1M  1 loop /snap/amazon-ssm-agent/2012
+loop1     7:1    0   97M  1 loop /snap/core/9665
+
+To check disk utilization)
+- df -h /data/kafka
+Shows :
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/xvdf        10G   33M   10G   1% /data/kafka
+
+
+we attach disk after starting the instance...
+so when we manually attach volume and you restart the instance or stop and 
+start the instance again then you have to manually attach volumes again (because you manually did that process and it gets removed when you stop cluster
+so you have to automate that process)
+
+Making EBS automount on reboot
+(fstab file system table (create backup))
+
+- dsh -a sudo cp /etc/fstab /etc/fstab.bak
+
+become root and make entry
+default 0 0 means automatically mount and echo in fstab 
+
+- sudo su
+- echo '/dev/xvdf /data/kafka xfs defaults 0 0' >> /etc/fstab
+- exit
+
+- ssh zk2 
+- sudo su
+- echo '/dev/xvdf /data/kafka xfs defaults 0 0' >> /etc/fstab
+- exit
+
+- ssh zk3
+- sudo su
+- echo '/dev/xvdf /data/kafka xfs defaults 0 0' >> /etc/fstab
+- exit
+- exit (from zk3)
+- exit (from zk2)
+- dsh -a sudo cat /etc/fstab
+Shows: 
+LABEL=cloudimg-rootfs	/	 ext4	defaults,discard	0 0
+/dev/xvdf /data/kafka xfs defaults 0 0
+LABEL=cloudimg-rootfs	/	 ext4	defaults,discard	0 0
+/dev/xvdf /data/kafka xfs defaults 0 0
+LABEL=cloudimg-rootfs	/	 ext4	defaults,discard	0 0
+/dev/xvdf /data/kafka xfs defaults 0 0
+
+ AWS
+- Select all
+- Reboot
+- Yes Reboot
+
+Terminal
+connect again
+- ssh -i pratiksha.pem ubuntu@ip
+
+Reboot instances from console
+- dsh -a sudo lsblk
+(Shows info)
+
+Start zookeeper service 
+because we reboot we have to start zookeeper services again
+- dsh -a sudo service zookeeper start
+
+Prerequisites for kafka
+
+Configuring system to open 100000 files
+(Security configuration to prevent DOS attack)
+
+echo "* hard nofile 100000
+* soft nofile 100000" | sudo tee --append /etc/security/limits.conf
+Shows:
+* soft nofile 100000" | sudo tee --append /etc/security/limits.conf
+* hard nofile 100000
+* soft nofile 100000
+
+ssh zk2
+echo "* hard nofile 100000
+* soft nofile 100000" | sudo tee --append /etc/security/limits.conf
+exit
+
+ssh zk3
+echo "* hard nofile 100000
+* soft nofile 100000" | sudo tee --append /etc/security/limits.conf
+exit
+
+Reboot instances from console
+
+- AWS
+- EC2
+- Select all instance
+- Reboot
+
+Terminal
+- ssh -i prati.pem ubuntu@ip
+
+Start kafka from ubuntu user
+- dsh -a sudo chown -R ubuntu:ubuntu /data/kafka
+- dsh -a sudo service zookeeper start
+
+Configure kafka properties 
+(kafka (server.properties))
+(remove existing property)
+
+- dsh -a rm /usr/local/kafka/config/server.properties 
+- nano /usr/local/kafka/config/server.properties
+
+advertised.listeners= where kafka advertise itself to receive data from producer
+it provides a gateway imp property 
+port no kafka 9092
+in kafka documentation msg is called log
+log.retention.hours=168 imp property
+means after how many hours/24*7 msg should be deleted
+
+
+############################# Server Basics #############################
+
+# The id of the broker. This must be set to a unique integer for each broker.
+broker.id=1
+# change your.host.name by your machine's IP or hostname
+advertised.listeners=PLAINTEXT://kf1:9092
+
+# Switch to enable topic deletion or not, default value is false
+delete.topic.enable=true
+
+############################# Log Basics #############################
+
+# A comma seperated list of directories under which to store log files
+log.dirs=/data/kafka
+
+# The default number of log partitions per topic. More partitions allow greater
+# parallelism for consumption, but this will also result in more files across
+# the brokers.
+num.partitions=8
+# we will have 3 brokers so the default replication factor should be 2 or 3
+default.replication.factor=3
+# number of ISR to have in order to minimize data loss
+min.insync.replicas=2
+
+############################# Log Retention Policy #############################
+
+# The minimum age of a log file to be eligible for deletion due to age
+# this will delete data after a week
+log.retention.hours=168
+
+# The maximum size of a log segment file. When this size is reached a new log segment will be created.
+log.segment.bytes=1073741824
+
+# The interval at which log segments are checked to see if they can be deleted according
+# to the retention policies
+log.retention.check.interval.ms=300000
+
+############################# Zookeeper #############################
+
+# Zookeeper connection string (see zookeeper docs for details).
+# This is a comma separated host:port pairs, each corresponding to a zk
+# server. e.g. "127.0.0.1:3000,127.0.0.1:3001,127.0.0.1:3002".
+# You can also append an optional chroot string to the urls to specify the
+# root directory for all kafka znodes.
+zookeeper.connect=zk1:2181,zk2:2181,zk3:2181/kafka
+
+# Timeout in ms for connecting to zookeeper
+zookeeper.connection.timeout.ms=6000
+
+
+############################## Other ##################################
+# Recommended to set this to false in production.
+# We'll keep it as true for the course
+auto.create.topics.enable=true
+
+
+we have to do it on all node
+- ssh zk2
+- nano /usr/local/kafka/config/server.properties
+copy contents from file (Make necessary changes)
+- change brokerid 2
+and advertise.listner to kf2
+
+
+############################# Server Basics #############################
+
+# The id of the broker. This must be set to a unique integer for each broker.
+broker.id=2
+# change your.host.name by your machine's IP or hostname
+advertised.listeners=PLAINTEXT://kf2:9092
+
+# Switch to enable topic deletion or not, default value is false
+delete.topic.enable=true
+
+############################# Log Basics #############################
+
+# A comma seperated list of directories under which to store log files
+log.dirs=/data/kafka
+
+# The default number of log partitions per topic. More partitions allow greater
+# parallelism for consumption, but this will also result in more files across
+# the brokers.
+num.partitions=8
+# we will have 3 brokers so the default replication factor should be 2 or 3
+default.replication.factor=3
+# number of ISR to have in order to minimize data loss
+min.insync.replicas=2
+
+############################# Log Retention Policy #############################
+
+# The minimum age of a log file to be eligible for deletion due to age
+# this will delete data after a week
+log.retention.hours=168
+
+# The maximum size of a log segment file. When this size is reached a new log segment will be created.
+log.segment.bytes=1073741824
+
+# The interval at which log segments are checked to see if they can be deleted according
+# to the retention policies
+log.retention.check.interval.ms=300000
+
+############################# Zookeeper #############################
+
+# Zookeeper connection string (see zookeeper docs for details).
+# This is a comma separated host:port pairs, each corresponding to a zk
+# server. e.g. "127.0.0.1:3000,127.0.0.1:3001,127.0.0.1:3002".
+# You can also append an optional chroot string to the urls to specify the
+# root directory for all kafka znodes.
+zookeeper.connect=zk1:2181,zk2:2181,zk3:2181/kafka
+
+# Timeout in ms for connecting to zookeeper
+zookeeper.connection.timeout.ms=6000
+
+
+############################## Other ##################################
+# Recommended to set this to false in production.
+# We'll keep it as true for the course
+auto.create.topics.enable=true
+
+
+- exit
+- ssh zk3
+- nano /usr/local/kafka/config/server.properties
+copy paste
+
+############################# Server Basics #############################
+
+# The id of the broker. This must be set to a unique integer for each broker.
+broker.id=3
+# change your.host.name by your machine's IP or hostname
+advertised.listeners=PLAINTEXT://kf3:9092
+
+# Switch to enable topic deletion or not, default value is false
+delete.topic.enable=true
+
+############################# Log Basics #############################
+
+# A comma seperated list of directories under which to store log files
+log.dirs=/data/kafka
+
+# The default number of log partitions per topic. More partitions allow greater
+# parallelism for consumption, but this will also result in more files across
+# the brokers.
+num.partitions=8
+# we will have 3 brokers so the default replication factor should be 2 or 3
+default.replication.factor=3
+# number of ISR to have in order to minimize data loss
+min.insync.replicas=2
+
+############################# Log Retention Policy #############################
+
+# The minimum age of a log file to be eligible for deletion due to age
+# this will delete data after a week
+log.retention.hours=168
+
+# The maximum size of a log segment file. When this size is reached a new log segment will be created.
+log.segment.bytes=1073741824
+
+# The interval at which log segments are checked to see if they can be deleted according
+# to the retention policies
+log.retention.check.interval.ms=300000
+
+############################# Zookeeper #############################
+
+# Zookeeper connection string (see zookeeper docs for details).
+# This is a comma separated host:port pairs, each corresponding to a zk
+# server. e.g. "127.0.0.1:3000,127.0.0.1:3001,127.0.0.1:3002".
+# You can also append an optional chroot string to the urls to specify the
+# root directory for all kafka znodes.
+zookeeper.connect=zk1:2181,zk2:2181,zk3:2181/kafka
+
+# Timeout in ms for connecting to zookeeper
+zookeeper.connection.timeout.ms=6000
+
+
+############################## Other ##################################
+# Recommended to set this to false in production.
+# We'll keep it as true for the course
+auto.create.topics.enable=true
+
+- exit
+
+Configure kafka bootscripts
+- sudo nano /etc/init.d/kafka
+
+copy paste
+
+#!/bin/bash
+#/etc/init.d/kafka
+DAEMON_PATH=/usr/local/kafka/bin
+DAEMON_NAME=kafka
+# Check that networking is up.
+#[ ${NETWORKING} = "no" ] && exit 0
+
+PATH=$PATH:$DAEMON_PATH
+
+# See how we were called.
+case "$1" in
+  start)
+        # Start daemon.
+        pid=`ps ax | grep -i 'kafka.Kafka' | grep -v grep | awk '{print $1}'`
+        if [ -n "$pid" ]
+          then
+            echo "Kafka is already running"
+        else
+          echo "Starting $DAEMON_NAME"
+          $DAEMON_PATH/kafka-server-start.sh -daemon /usr/local/kafka/config/server.properties
+        fi
+        ;;
+  stop)
+        echo "Shutting down $DAEMON_NAME"
+        $DAEMON_PATH/kafka-server-stop.sh
+        ;;
+  restart)
+        $0 stop
+        sleep 2
+        $0 start
+        ;;
+  status)
+        pid=`ps ax | grep -i 'kafka.Kafka' | grep -v grep | awk '{print $1}'`
+        if [ -n "$pid" ]
+          then
+          echo "Kafka is Running as PID: $pid"
+        else
+          echo "Kafka is not Running"
+        fi
+        ;;
+  *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+esac
+
+exit 0
+
+save and exit
+
+Give execute permission)
+- sudo chmod +x /etc/init.d/kafka
+
+Change to root
+- sudo chown root:root /etc/init.d/kafka 
+
+Make default entry)
+- sudo update-rc.d kafka defaults
+( ignore warning )
+
+Do this on 2nd nodes
+- ssh zk2
+- sudo nano /etc/init.d/kafka
+copy paste
+
+#!/bin/bash
+#/etc/init.d/kafka
+DAEMON_PATH=/usr/local/kafka/bin
+DAEMON_NAME=kafka
+# Check that networking is up.
+#[ ${NETWORKING} = "no" ] && exit 0
+
+PATH=$PATH:$DAEMON_PATH
+
+# See how we were called.
+case "$1" in
+  start)
+        # Start daemon.
+        pid=`ps ax | grep -i 'kafka.Kafka' | grep -v grep | awk '{print $1}'`
+        if [ -n "$pid" ]
+          then
+            echo "Kafka is already running"
+        else
+          echo "Starting $DAEMON_NAME"
+          $DAEMON_PATH/kafka-server-start.sh -daemon /usr/local/kafka/config/server.properties
+        fi
+        ;;
+  stop)
+        echo "Shutting down $DAEMON_NAME"
+        $DAEMON_PATH/kafka-server-stop.sh
+        ;;
+  restart)
+        $0 stop
+        sleep 2
+        $0 start
+        ;;
+  status)
+        pid=`ps ax | grep -i 'kafka.Kafka' | grep -v grep | awk '{print $1}'`
+        if [ -n "$pid" ]
+          then
+          echo "Kafka is Running as PID: $pid"
+        else
+          echo "Kafka is not Running"
+        fi
+        ;;
+  *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+esac
+
+exit 0
+
+save and exit
+- sudo chmod +x /etc/init.d/kafka
+- sudo chown root:root /etc/init.d/kafka 
+- sudo update-rc.d kafka defaults
+
+******Do this on 3rd node**********************
+
+- ssh zk3
+- sudo nano /etc/init.d/kafka
+copy paste
+
+#!/bin/bash
+#/etc/init.d/kafka
+DAEMON_PATH=/usr/local/kafka/bin
+DAEMON_NAME=kafka
+# Check that networking is up.
+#[ ${NETWORKING} = "no" ] && exit 0
+
+PATH=$PATH:$DAEMON_PATH
+
+# See how we were called.
+case "$1" in
+  start)
+        # Start daemon.
+        pid=`ps ax | grep -i 'kafka.Kafka' | grep -v grep | awk '{print $1}'`
+        if [ -n "$pid" ]
+          then
+            echo "Kafka is already running"
+        else
+          echo "Starting $DAEMON_NAME"
+          $DAEMON_PATH/kafka-server-start.sh -daemon /usr/local/kafka/config/server.properties
+        fi
+        ;;
+  stop)
+        echo "Shutting down $DAEMON_NAME"
+        $DAEMON_PATH/kafka-server-stop.sh
+        ;;
+  restart)
+        $0 stop
+        sleep 2
+        $0 start
+        ;;
+  status)
+        pid=`ps ax | grep -i 'kafka.Kafka' | grep -v grep | awk '{print $1}'`
+        if [ -n "$pid" ]
+          then
+          echo "Kafka is Running as PID: $pid"
+        else
+          echo "Kafka is not Running"
+        fi
+        ;;
+  *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+esac
+
+exit 0
+
+save and exit
+- sudo chmod +x /etc/init.d/kafka
+- sudo chown root:root /etc/init.d/kafka 
+- sudo update-rc.d kafka defaults
+- exit
+Back on ZK1
+
+Start kafka service
+
+- dsh -a sudo service kafka start
+- nc -vz kf2 9092
+Shows: Connection to kf2 9092 port [tcp/*] succeeded!
+- nc -vz kf3 9092
+Shows: Connection to kf2 9092 port [tcp/*] succeeded!
+
+Check logs (Skip this Part directly goto working with kafka because this log dosnt support this version )
+tail -f /usr/local/kafka/logs/server.log 
+ssh zk2 
+tail -f /usr/local/kafka/logs/server.log 
+ssh zk3
+tail -f /usr/local/kafka/logs/server.log 
+
+
+Working with kafka
+chroot is kafka
+
+Create a topic name my-topic
+- kafka-topics.sh --zookeeper zk1:2181,zk2:2181,zk3:2181/kafka --create --topic my-topic --replication-factor 3 --partitions 3 
+Shows:
+Created topic "my-topic".
+
+Create a producer
+- kafka-console-producer.sh --broker-list kf1:9092,kf2:9092,kf3:9092 --topic my-topic 
+(publish some data
+write something)
+
+Another terminal
+connect to another node
+- ssh -i prati.pem ubuntu@ip
+
+ Create a consumer
+- kafka-console-consumer.sh --bootstrap-server kf1:9092,kf2:9092,kf3:9092 --topic my-topic --from-beginning
+
+from-beginning : shows data of previous console
+
+Create another topic
+- kafka-topics.sh --zookeeper zk1:2181,zk2:2181,zk3:2181/kafka --create --topic my-topic2 --replication-factor 3 --partitions 3 
+
+List topics 
+- kafka-topics.sh --zookeeper zk1:2181,zk2:2181,zk3:2181/kafka –list
+Shows:
+__consumer_offsets
+my-topic
+my-topic2
+
+Consumer offset : Whenever consumer is created a Default topic is created and all the  offset that the consumer has seen it will commit in consumer offset.s 
