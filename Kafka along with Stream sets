@@ -1,0 +1,586 @@
+Streamsets
+
+- Streamsets Data Collector (SDC)
+- Data Integration Tool (Any source to any Destination)
+- Without writing single line of code
+- It is independent tool
+- We are going to us streamset with kafka
+- The company who developed streamset says that we made Streamsets with kafka Dead easy and reason is we can automate the creation of procedures and consumers
+- It also help with data drift ( if we are using kafka for source to destination then we need procedures and consumers so we need developer for creating that code but when we have changes then we have to go again to developer and tester so their will be LATENCY(Delay) this is called data drift)
+- Streamsets automatically takes care of data drift.
+- We are going to us streamset with kafka because kafka's resilience and streamsets simplicity
+
+Required Things 
+- This required things should be compatible with each other 
+
+OS = Ubuntu 14
+Java = Java 7
+CDH = 5.9
+Kafka = 2.2
+Streamsets = x
+
+AWS 
+- Services
+- EC2
+- Launch Instance
+- Community AMIS
+- Search ubuntu 14
+- take ubuntu trusty 14 2019 version
+- t2.2XLarge
+- Storage 100GB
+- Default Security Group
+- Next
+- Next
+- Launch Instance
+- Default
+- Inbound Rules
+- My IP
+
+Terminal
+- cd Downloads
+
+SSH in to the instance you created
+- ssh -i key prati.pem ubuntu@18.210.15.5
+
+Update the server 
+- sudo apt-get update && sudo apt-get dist-upgrade -y
+
+Disable transparent huge pages
+- sudo nano /etc/rc.local
+Add these lines:
+if test -f /sys/kernel/mm/transparent_hugepage/enabled; then
+    echo never > /sys/kernel/mm/transparent_hugepage/enabled
+fi
+
+if test -f /sys/kernel/mm/transparent_hugepage/defrag; then
+    echo never > /sys/kernel/mm/transparent_hugepage/defrag
+fi
+- sudo -i
+- source /etc/rc.local 
+
+Install NTP
+- sudo apt-get install ntp -y 
+
+Set Swappiness 
+- sudo sysctl vm.swappiness=1
+
+AWS
+- EC2
+- Instances
+- Action
+- Image
+- Create Image
+- Cloudera 
+- Select no REBOOT
+- Create Image
+
+- Launch
+- t2.2Xlarge
+- Configure
+- 2
+- Advance Details
+(
+#!bin/bash
+sudo sysctl vm.swappiness=1
+)
+- Next
+- Next
+- Security group
+- Default
+- Launch
+
+For Worker Node
+- Launch Image
+- t2.large
+- Configure
+- 3
+- Advance Details
+(
+#!bin/bash
+sudo sysctl vm.swappiness=1
+)
+- Next
+- Next
+- Security group
+- Default
+- Launch
+
+Install and start CM 
+SSH into cloudera-manager host
+
+- wget http://archive.cloudera.com/cm5/installer/latest/cloudera-manager-installer.bin
+- chmod u+x cloudera-manager-installer.bin
+- sudo ./cloudera-manager-installer.bin
+- NEXT
+- NEXT
+- Yes
+- Next
+- Yes
+- OK
+- OK
+
+- in browser "public_ip_of_cm:7180" 
+
+username : admin
+password : admin 
+
+- Accept 
+- Yes
+- Continue
+- Continue
+
+- Copy private DNS of 6
+- Paste it in CDH cluster Installation
+- Continue
+- Cluster Installation
+
+Cloudera Installation
+
+In Select Repository 
+- Choose Method - Use Parcels - More Options
+- Remote Parcel Repository URLs
+- On First Row
+http://archive.cloudera.com/cdh5/parcels/5.9.3/
+- On Seventh row
+http://archive.cloudera.com/kafka/parcels/2.2.0/
+- Save Changes
+- tick on cdh5 parcel
+- tick on kafka 2.2.0 
+- Continue
+- Install java
+- Continue
+- Continue
+
+In Enter Login Cedentials
+- Login To All Hosts As: 
+	- ubuntu
+- Authentication Method:
+	- all user accept same private key
+- Private Key File:
+	- upload private key 
+- Continue
+- Continue
+- Continue
+- Finish
+
+In Cluster Setup
+- Core Hadoop
+- Continue
+
+In Assign Roles
+(Balance Roles between 3 Masters)
+
+- On 2nd Master
+Add following Roles and Remove them From 1st master
+- Hue
+- Oozie
+- Zookeeper
+
+- On 3rd Master
+Add following Roles and Remove them From 1st master
+- Cloudera Management Service add on 3rd master
+- Zookeeper
+
+- Zookeeper must run on all three nodes
+
+- Continue
+- Test Connection
+- Continue
+
+In Cluster Setup
+- HDFS Block Size = 256MB
+- Continue
+
+- Continue
+- Finish
+
+Cloudera
+- Cloudera Manager
+- On right side of Cluster names click on arrow
+- Add service
+- Click on kafka
+- Continue
+- Make it run on Datanode(Select 3)
+- Ok
+- Continue
+
+what is kafka Mirror Maker ? 
+- Usef for replication of kafka or backup
+- For Industry Perspective we need backup for kafka
+- Kafka is not at rest. data is continuously running. due to this kafka created a service called mirror maker
+- Whatever data comes to cluster automated data backup created by it.
+
+Gateway Host?
+- we run kafka broker on 3 datanode
+- if we want to connect kafka from other node than the brokernode we need to create a gateway so that we connect kafka to that node.
+
+
+- Continue
+- Sometimes it shows error because of bug
+- Click on kafka broker service in blue font
+- Open link in new window
+- In new window
+- Click on Cloudera manager
+- kafka (red)
+- Configuration
+- Search for heap
+- Increase heap size 
+(its less than the recommended so error will show in installation)
+- 256 MB
+- Save Changes
+- Go back to installation page
+- Resume
+- Continues
+- Finish
+
+Streamsets on Cloudera Manager
+
+
+Log in to CM host
+
+- ssh -i pratiksha.pem ubuntu@public_ip
+
+(CSD Custom Servic Descripter)
+
+CSD
+- Makes service/ tool addd to add service button
+- It will make an entry in services
+- It is responsibe for centralize management
+- It will make entry in Cloudera Management
+- With CHD jar you can get full cloudera management functionality for your service
+
+Install Streamsets CSD
+
+- wget https://archives.streamsets.com/datacollector/2.4.1.0/csd/STREAMSETS-2.4.1.0.jar
+- ls
+Move to csd dir
+- sudo mv STREAMSETS-2.4.1.0.jar /opt/cloudera/csd/
+- cd /opt/cloudera/csd/
+- ll
+
+Streamset jar have ownership if ubuntu ubuntu
+but the main ownership of directory is cloudera-scm cloudera-scm
+cloudera-scm is user on linux for cloudera
+cloudera Manager is refer as SCM SERVER
+
+Change ownership
+- sudo chown cloudera-scm:cloudera-scm /opt/cloudera/csd/STREAMSETS*.jar
+- ll
+
+Give permission to access
+- sudo chmod 644 /opt/cloudera/csd/STREAMSETS*.jar
+- cd
+
+make Changes available
+- sudo service cloudera-scm-server restart
+
+Restart cloudera management services
+- Refresh cloudera Page
+( this site cant be reach error will show. it will take time to restart)
+
+- Login Again
+- CMS have Restart Button
+- Click on restart button
+- Finish
+
+Download parcel for stramsets data collector (https://archives.streamsets.com/index.html)
+
+Parcels are of two type
+- Cloudera (CM automatically downloads and make it available on cluster)
+- Third Party (we can manually download and make it available on cluster)
+
+-  wget https://archives.streamsets.com/datacollector/2.4.1.0/parcel/STREAMSETS_DATACOLLECTOR-2.4.1.0-trusty.parcel
+
+Download the hash file 
+- .sha extension
+- It is basically hash function. 
+- Hash function changes some bits of stram and it will remove some bits and run hash function on it at source point. along with that file we also send hash function over the network in encrypted form. 
+- At destination the reverse hash function is performed to check if it is as same as original.
+- it will check packets integrity
+
+We download parcels so to check integrity we need hash function
+
+- wget https://archives.streamsets.com/datacollector/2.4.1.0/parcel/STREAMSETS_DATACOLLECTOR-2.4.1.0-trusty.parcel.sha
+- ls
+
+Move the parcel and hash file to the local repository 
+- When you download any service it will check for either remote location(if it is downloded from cloudera repository) or local location(it the parcel is from thired party or manually)
+
+important
+we manually downloaded parcel so we have to move it to local repository/location.
+location to remember in CLoudera /opt/cloudera/parcel-repo/
+
+- sudo mv STREAMSETS_DATACOLLECTOR-2.4.1.0-trusty.parcel /opt/cloudera/parcel-repo/
+- sudo mv STREAMSETS_DATACOLLECTOR-2.4.1.0-trusty.parcel.sha /opt/cloudera/parcel-repo/
+   
+Change the ownership of parcel and hash file
+- cd /opt/cloudera/parcel-repo/
+- ll
+
+It is managed by cloudera manager so change ownership to cloudera-scm
+- sudo chown cloudera-scm:cloudera-scm STREAMSETS_DATACOLLECTOR-2.4.1.0-trusty.parcel
+- sudo chown cloudera-scm:cloudera-scm STREAMSETS_DATACOLLECTOR-2.4.1.0-trusty.parcel.sha
+- ll
+- cd
+
+ Distribute and activate parcel
+- Go to Cloudera Manager and click on parcel (GiftBox)
+- Check for new Parcel
+- Configuration
+(Shows Location of local and remote repositories)
+- Streamset
+- Click on distribute
+- Activate
+- Ok
+
+- Click on Cloudera Manager
+- On right side of Cluster names click on arrow
+- Add Service
+- Streamsets
+- Continue
+- Add it to CM 
+- Continue
+- Continue
+- Continue
+- Finish
+
+Kafka pipeline using streamsets
+
+Send the sample credit card data file (AVRO format) to DC
+
+Another Terminal
+Copy file to desktop
+- cd Desktop
+- ls 
+- cp ccsample ~
+- cd
+- ls
+
+(before this copy prati.pem in home directory or it will show error)
+scp -i prati.pem ccsample ubuntu@ipofcm:~
+
+on another terminal check using
+- ls
+
+Install streamsets on Cloudera
+Open stremsets data collector
+	- publicipofcm:18630
+	- 100.25.37.210:18630
+		- admin
+		- admin
+
+Create two pipelines one for producer and one for consumer
+- create new pipeLine
+- Producer pipeline
+- Save
+
+Producer pipeline
+Send ccsample file to server
+Drag Directory and kafka producer to canvas and configure it accordingly
+
+- Drag and Drop Directory
+- Select Destination 
+- Search kafka Producer
+- Double click on kafka producer
+- Draw a line from Directory to Producer by dragging
+
+- Click on red
+- Error records
+- Discard
+
+- Click on Directory red
+- Files Directory = /home/ubuntu/
+Files Directory - The absolute file path to the directory containing the sample .avro files. (eg : /home/ubuntu/)
+- File Name Pattern - cc*
+- Data Format - Avro
+
+
+- Click on Producer red
+- Kafka
+- Broker URI
+- For that goto
+	- CM 
+	- Kafka
+	- Instances
+	- copy and paste active (in format)
+ip-172-31-70-52.ec2.internal:9092,ip-172-31-66-177.ec2.internal:9092,ip-172-31-71-101.ec2.internal:9092
+
+	- copy and paste other two (in format)
+ip_of_active:9092,ip:9092,ip:9092
+ 
+## In kafka producer give the FQDN of broker list (comma seperated with port no) and give the topic name. Give data format as SDC
+
+- Topic name: mytopic (Remember)
+- Data Format SDC Format
+- SDC record Streamset data collector 
+- Whatever source record it is at source side at destination streamset will change it to SDC (Solution to Data Drieft problem)
+
+- Click on EYE button
+- Run preview
+- To check workig click on Record1
+- it will show data
+- Means it is working correctly
+- Stop preview
+
+- Pipelines (Open link in new tab)
+- Create new Pipeline
+- Consumer pipeline
+
+Consumer pipeline
+Drag the kafka consumer, field type converter, field masker, hadoop fs and S3 to canvas
+
+- Search kafka consumer
+- Double click on kafka consumer
+- Select Processor
+- Search Field type Converter
+- Click on it
+- Field Masker
+- Click on it
+(On Destination we need hadoop fs and S3)
+- Search Amazon s3
+- Click on it
+- Search hadoop fs
+- Click on it
+
+- Draw a line from kafka consumer to Field type Converter by dragging
+- Draw a line from Field type Converter to Field Masker by dragging
+- Draw a line from Field Masker to hadoop fs by dragging
+- Draw a line from Field Masker to Amazon s3 by dragging
+
+- Click on red
+- Error records
+- Discard
+
+- Click on red kafka Consumer
+- Broker Uri (copy from kafka producer)
+- Zookeeper Uri
+- For that goto
+	- CM 
+	- Zookeeper
+	- Instances
+	- copy and paste all three (in format)
+ip-172-31-55-29.ec2.internal:2181,ip-172-31-63-96.ec2.internal:2181,ip-172-31-55-139.ec2.internal:2181
+
+- ( ip1:2181,ip2:2181,ip3:2181) 
+
+In kafka consumer give FQDN of broker and zookeeper. Also give the same topic name. Give data format as SDC
+
+- Topic: mytopic
+- Data Format : SDC Record
+
+- Click on red Field Type Converter
+- Conversion
+- Conversion Method = By Field Name
+- Field to Convert = /card_number
+- Convert to Type = STRING
+
+In field converter - type '/card_number' in the 'Fields to Convert' text box and set type 'String' in 'Convert to String'
+
+
+- Click on red field masker
+- Mask
+- Field to Mask = /card_number
+- Mask Type = custom
+- Custom Mask = ************####
+
+In field masker - In the 'Field Masker' stage configuration type '/card_number', set the mask type to 'custom'. Give mask as > ************#### (Only last 4 digits will be visible)
+
+
+- Click on red hadoop fs
+- Hadoop fs
+- Hadoop fs URI = hdfs://dns_of_nn:8020/
+  hdfs://ip-172-31-55-139.ec2.internal:8020/
+
+- For that goto
+	- CM 
+	- HDFS
+	- Instances
+	- copy and paste uri at place of nn
+- Data Format
+- Data Format = Avro
+- Avro schema location = in Pipeline Configuration
+
+In hadoop fs five Hadoop URI - hdfs://nn:8020/
+     	In data format give avro ; schema location - in pipeline ; 
+	schema -> 
+
+Copy this Schema in Avro Schema
+
+{"namespace" : "cctest.avro",
+ "type": "record",
+ "name": "CCTest",
+ "doc": "Test Credit Card Transactions",
+ "fields": [
+            {"name": "transaction_date", "type": "string"},
+            {"name": "card_number", "type": "string"},
+            {"name": "card_expiry_date", "type": "string"},
+            {"name": "card_security_code", "type": "string"},
+            {"name": "purchase_amount", "type": "string"},
+            {"name": "description", "type": "string"}
+           ]
+} 
+
+- and paste it in Avro Schema
+- Avro compression codec - bzip2
+
+
+- Click on red Amazon S3
+- AWS
+- My Security Credentials
+- Access Keys
+- Create new access key
+- Copy acess key id and Paste it at Access Key
+- Copy Secret acess key and Paste it at Secret Access Key
+- Availability Zone =
+- Bucket Name =
+- Create or give existing bucket name
+- Data Format
+- Data Format = Avro
+- schema location = in pipeline
+
+In S3 give access key and secret acces key , specify region and give bucket name
+		In data format give avro ; schema location - in pipeline ; 
+	schema -> 
+
+Copy Schema
+
+{"namespace" : "cctest.avro",
+ "type": "record",
+ "name": "CCTest",
+ "doc": "Test Credit Card Transactions",
+ "fields": [
+            {"name": "transaction_date", "type": "string"},
+            {"name": "card_number", "type": "string"},
+            {"name": "card_expiry_date", "type": "string"},
+            {"name": "card_security_code", "type": "string"},
+            {"name": "purchase_amount", "type": "string"},
+            {"name": "description", "type": "string"}
+           ]
+} 
+ 
+Paste it
+
+- Avro compression - bzip2
+- Click on EYE button
+- Run preview
+- Stop preview
+
+Output
+First run consumer pipeline then run producer pipeline
+
+- Click on Play Button
+- you can see charts
+- In Consumer end also you can see charts
+
+- AWS
+- Bucket
+- SDC records
+
+- Cloudera Manager
+- HDFS
+- File Browser
+- tmp
+- out
+- sdc
+
+You can also check it through terminal via hdfs
