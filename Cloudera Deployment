@@ -1,0 +1,167 @@
+Cloudera Deployment
+Delivering an Enterprise Data Hub in the cloud with Cloudera
+
+AWS
+- Ec2
+- Instances
+- Launch Instances
+- Ubuntu 16
+- T2.2Xlarge
+- Storage : 100gb (You can select magnetic to minimize cost )
+- Name tag : cm
+- Security group : Default (all traffic : my ip)
+- Configure and Launch
+- Launch
+
+
+Terminal
+
+SSH in to the instance you created 
+- ssh -i <key.pem> ubuntu@ip
+
+Update the server 
+-  sudo apt-get update && sudo apt-get dist-upgrade -y
+
+Disable transparent huge pages
+- sudo nano /etc/rc.local
+Add these lines:
+if test -f /sys/kernel/mm/transparent_hugepage/enabled; then
+    echo never > /sys/kernel/mm/transparent_hugepage/enabled
+fi
+
+if test -f /sys/kernel/mm/transparent_hugepage/defrag; then
+    echo never > /sys/kernel/mm/transparent_hugepage/defrag
+fi
+
+- sudo -i
+- source /etc/rc.local 
+
+Install NTP
+- sudo apt-get install ntp -y
+To check ntp status 
+- sudo service ntp status
+
+If it isn't running 
+- sudo service ntp start 
+
+
+Set Swappiness
+- sudo sysctl -a | grep vm.swappiness
+- sudo sysctl vm.swappiness=1
+
+Note : Now, save the instance to an image, call it “Cloudera Manager” Make sure to 
+check “No reboot”
+
+AWS
+- EC2
+- Instances
+- Action
+- Create Image
+- Cloudera 
+- Select no REBOOT
+- Create Image
+- Launch
+- t2.2Xlarge
+- Configure
+- 2
+- Advance Details
+(
+#!bin/bash
+sudo sysctl vm.swappiness=1
+)
+- Next
+- Next
+- Security group
+- Default
+- Launch
+
+
+For Worker Node
+- Launch Image
+- t2.large
+- Configure
+- 3
+- Advance Details
+(
+#!bin/bash
+sudo sysctl vm.swappiness=1
+)
+- Next
+- Next
+- Security group
+- Default
+- Launch
+
+Install and start CM 
+SSH into cloudera-manager host
+
+-  wget http://archive.cloudera.com/cm5/installer/latest/cloudera-manager-installer.bin
+-  chmod u+x cloudera-manager-installer.bin
+- sudo ./cloudera-manager-installer.bin
+- NEXT
+- NEXT
+- Yes
+- Next
+- OK
+- OK
+
+## in browser "public_ip_of_cm:7180" 
+18.210.15.5:7180
+username : admin
+password : admin 
+
+- Accept
+- Continue
+- Yes
+- Continue
+- Continue
+- Copy private DNS of 6
+- Search
+- Continue
+- Cluster Installation
+- Continue
+- Install
+- Continue
+- Continue
+
+In Enter Login Cedentials
+- Login To All Hosts As: 
+	- ubuntu
+- Authentication Method:
+	- all user accept same private key
+- Private Key File:
+	- upload private key 
+- Continue
+- Continue
+- Continue
+- Finish
+
+In Cluster Setup
+- Core Hadoop
+- Continue
+
+In Assign Roles
+(Balance Roles between 3 Masters)
+
+- On 2nd Master
+Add following Roles and Remove them From 1st master
+- Hue
+- Oozie
+- Zookeeper
+
+- On 3rd Master
+Add following Roles and Remove them From 1st master
+- Cloudera Management Service add on 3rd master
+- Zookeeper
+
+- Zookeeper must run on all three nodes
+
+- Continue
+- Test Connection
+- Continue
+
+In Cluster Setup
+- HDFS Block Size = 256MB
+- Continue
+- Continue
+- Finish
