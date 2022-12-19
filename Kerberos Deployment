@@ -1,0 +1,493 @@
+Kerberos
+
+
+**** Required Things *****
+- OS : Ubuntu 14
+- CDH : 5.9
+- In JDK selection time
+tick after
+
+***** AWS *****
+- Services
+- EC2
+- Launch Instance
+- Community AMIS
+- Search ubuntu 14
+- take ubuntu trusty 14 2019 version
+- t2.2XLarge
+- Storage 100GB
+- Default Security Group
+- Next
+- Next
+- Launch Instance
+- Default
+- Inbound Rules
+- My IP
+
+
+***** Terminal *****
+- cd Downloads
+
+SSH in to the instance you created 
+- ssh -i <key.pem> ubuntu@54.162.76.95
+
+Update the server
+- sudo apt-get update && sudo apt-get dist-upgrade -y
+
+Disable transparent huge pages
+- sudo nano /etc/rc.local
+
+## Add these lines:
+if test -f /sys/kernel/mm/transparent_hugepage/enabled; then
+    echo never > /sys/kernel/mm/transparent_hugepage/enabled
+fi
+
+if test -f /sys/kernel/mm/transparent_hugepage/defrag; then
+    echo never > /sys/kernel/mm/transparent_hugepage/defrag
+fi
+
+- sudo -i
+
+- source /etc/rc.local 
+
+Install NTP 
+- sudo apt-get install ntp -y 
+- sudo service ntp start 
+
+Set Swappiness
+- sudo sysctl vm.swappiness=1
+
+### Note : Now, save the instance to an image, call it “Cloudera Manager” Make sure to check “No reboot”
+
+***** AWS *****
+- EC2
+- Instances
+- Action
+- Image
+- Create Image
+- Cloudera 
+- Select no REBOOT
+- Create Image
+
+- Launch
+- t2.2Xlarge
+- Configure
+- 2
+- Advance Details
+(
+#!bin/bash
+sudo sysctl vm.swappiness=1
+)
+- Next
+- Next
+- Security group
+- Default
+- Launch
+
+For Worker Node
+- Launch Image
+- t2.large
+- Configure
+- 3
+- Advance Details
+(
+#!bin/bash
+sudo sysctl vm.swappiness=1
+)
+- Next
+- Next
+- Security group
+- Default
+- Launch
+
+Install and start CM 
+
+SSH into cloudera-manager host
+- wget http://archive.cloudera.com/cm5/installer/latest/cloudera-manager-installer.bin
+- chmod u+x cloudera-manager-installer.bin
+ sudo ./cloudera-manager-installer.bin
+
+- NEXT
+- NEXT
+- Yes
+- Next
+- Yes
+- OK
+- OK
+
+## in browser "public_ip_of_cm:7180" 
+
+18.210.15.5:7180
+
+username : admin
+password : admin 
+
+## Note : in login credentials page 
+	  select user ubuntu 
+	  all users accept same private key (give the .pem key created for the instances)
+
+- Acept 
+- Yes
+- Continue
+- Continue
+
+- Copy private DNS of 6
+- Paste it in CDH cluster Installation
+- Continue
+- Cluster Installation
+
+***** Cluster Installation *****
+
+- Cluster Installation
+- Select Repository → Choose Method → Use Parcels → More Options
+- Remote Parcel Repository URLs
+- On First Row
+http://archive.cloudera.com/cdh5/parcels/5.9.3/
+- Save Changes
+- tick on cdh5.9.3 parcel
+- Continue
+- Install java
+- Java Installation Page
+	- Tick on (Install Oracle Java SE Development Kit (JDK 7)
+- Below that
+	- Tick om (Install Java Unlimited Strength Encryption Policy Files)
+
+In Enter Login Cedentials
+- Login To All Hosts As: 
+	- ubuntu
+- Authentication Method:
+	- all user accept same private key
+- Private Key File:
+	- upload private key 
+- Continue
+- Continue
+- Continue
+- Finish
+
+In Cluster Setup
+- Core Hadoop
+- Continue
+
+In Assign Roles
+(Balance Roles between 3 Masters)
+
+- On 2nd Master
+Add following Roles and Remove them From 1st master
+- Hue
+- Oozie
+- Zookeeper
+
+- On 3rd Master
+Add following Roles and Remove them From 1st master
+- Cloudera Management Service add on 3rd master
+- Zookeeper
+
+- Zookeeper must run on all three nodes
+
+- Continue
+- Test Connection
+- Continue
+
+In Cluster Setup
+- HDFS Block Size = 256MB
+- Continue
+
+- Continue
+- Finish
+
+
+We need 6 node Cluster
+- 3 Master (Cm and 2)
+- 3 Worker
+- KDC on CM
+- For Other 5 you need kerberos client librarie
+
+**** Terminal *****
+
+Problem Statement : Hadoop Security Mechanism 
+
+- ssh -i pratiksha.pem ubuntu@cm_IP
+
+- ls
+- nano abc
+- type anything
+
+- hdfs dfs -mkdir /data
+- Show error becoz we are on Cm
+- Connect to datanode
+- ssh -i pratiksha.pem ubuntu@datanode_IP
+- hdfs dfs -mkdir /data
+- ubuntu doesnt have write permission
+
+- Cloudera
+- HDFS
+- Configuration
+- Search hdfs permission
+-  Check hdfs Permission (already tick)
+
+- dfs.permission
+- This is only property which provide Security 
+
+- export HADOOP_USER_NAME=hdfs
+- hdfs dfs -mkdir /data
+
+Solution to problem statement
+- allows to fire command because we use variable and export it
+- from ubuntu we telling that i am hdfs so it allows
+- this is the reason we need strong authentication mechanism
+- kerberos
+
+- Internet says we cannot install kerberos on ubuntu
+
+Kerberos Installation
+
+## Install kerberos KDC and Admin server
+## On Cm host install kdc and admin server
+
+- sudo apt install krb5-kdc krb5-admin-server
+- yes
+
+(realm = similar to dns (ex: www.cloudlytics.com)
+it must be in capital letters)
+
+- For realm give : HADOOP.COM
+- Kerberos server for your realm : <private-dns-of-cm>
+- Paste same dns here(ip-172-31-50-33.ec2.internal)
+- Next
+- paste previous dns(ip-172-31-50-33.ec2.internal)
+- ok
+
+Fail
+Fail
+
+- sudo krb5_newrealm
+
+(if it shows random data loading
+connect again and fire update command)
+
+Important point to remember
+Two Configuration Files in realm
+- krb5.conf have only 3 config
+	- realm
+	- kdc
+	- admin server
+- kdc.conf
+	- other config
+
+Check the krb5.conf
+- nano /etc/krb5.conf
+
+- nano /usr/share/doc/krb5-kdc/examples/kdc.conf
+
+kadmin command goes on private dns (interview)
+
+- sudo kadmin.local
+- addprinc cm/admin
+- password
+- exit
+
+- sudo nano /etc/krb5kdc/kadm5.acl
+- cm/admin@HADOOP.COM        *
+Copy Paste this line
+(* means all privileges delete add etc)
+
+- sudo /etc/init.d/krb5-admin-server restart
+
+- sudo kadmin.local
+- addprinc user1
+
+
+***** Terminal 2 *****
+- ssh -i pratiksha.pem ubuntu@ipof2node
+- yes
+- sudo apt-get install krb5-user libpam-krb5 libpam-ccreds auth-client-config
+- HADOOP.COM
+- copy paste dns of cm(ip-172-31-50-33.ec2.internal)
+- copy paste dns of cm(ip-172-31-50-33.ec2.internal)
+- kinit -p user1
+- password
+- klist
+- exit
+
+
+***** Terminal 3 *****
+- ssh -i pratiksha.pem ubuntu@ipof3node
+- yes
+- sudo apt-get install krb5-user libpam-krb5 libpam-ccreds auth-client-config
+- HADOOP.COM
+- copy paste dns of cm(ip-172-31-50-33.ec2.internal)
+- copy paste dns of cm(ip-172-31-50-33.ec2.internal)
+- kinit -p user1
+- password
+- klist
+- exit
+
+
+***** Terminal 4 *****
+- ssh -i pratiksha.pem ubuntu@ipof4node
+- yes
+- sudo apt-get install krb5-user libpam-krb5 libpam-ccreds auth-client-config
+- HADOOP.COM
+- copy paste dns of cm(ip-172-31-50-33.ec2.internal)
+- copy paste dns of cm(ip-172-31-50-33.ec2.internal)
+- exit
+
+
+***** Terminal 5 *****
+- ssh -i pratiksha.pem ubuntu@ipof5node
+- yes
+- sudo apt-get install krb5-user libpam-krb5 libpam-ccreds auth-client-config
+- HADOOP.COM
+- copy paste dns of cm(ip-172-31-50-33.ec2.internal)
+- copy paste dns of cm(ip-172-31-50-33.ec2.internal)
+- exit
+
+
+***** Terminal 6 *****
+- ssh -i pratiksha.pem ubuntu@ipof6node
+- yes
+- sudo apt-get install krb5-user libpam-krb5 libpam-ccreds auth-client-config
+- HADOOP.COM
+- copy paste dns of cm(ip-172-31-50-33.ec2.internal)
+- copy paste dns of cm(ip-172-31-50-33.ec2.internal )
+- exit
+
+***** Cloudera *****
+
+- Administration
+- Security
+- Enable Kerberos
+(Prereqvisites of kerberos copy pate them here)
+- tick 1
+	Set up a working KDC. Cloudera Manager supports MIT KDC and Active Directory.
+
+- tick 2
+	The KDC should be configured to have non-zero ticket lifetime and renewal lifetime. CDH will not work properly if tickets are not renewable.
+
+- tick 3
+	OpenLdap client libraries should be installed on the Cloudera Manager Server host if you want to use Active Directory. Also, Kerberos client libraries should be installed on ALL hosts.
+
+- tick 4
+	Cloudera Manager needs an account that has permissions to create other accounts in the KDC.
+
+- Continue
+- KDC Server host : copy dns of cm and paste 
+- KDS Admin Server host: copy dns of cm and paste
+- 7 days
+- Continue
+- Dont tick
+- cm/admin
+- password
+- Continue
+- Continue
+- yes
+- Done
+- Finish
+
+
+***** Terminal *****
+Connect to worker node
+
+- ssh -i pratiksha.pem ubuntu@2ip
+- hdfs dfs -mkdir /data1
+- error
+- export HADOOP_USER_NAME=hdfs
+hdfs dfs -mkdir /data1
+- error
+- Means kerberos working
+
+- sudo passwd hdfs
+- password
+- sudo adduser hdfs sudo
+- sudo kadmin.local
+- addprinc hdfs
+- pwd
+- pwd
+- exit
+- su hdfs
+- cd
+- hdfs dfs -mkdir /data2
+- error
+(root also cannot enter without authentication in kerberos)
+- kinit -p hdfs
+- hdfs dfs -mkdir /data3
+now it will allow
+
+
+## Kerberos Commands
+This command should fire from cm where we install KDC admin server 
+
+→ To see principals
+- sudo kadmin.local
+- listprincs
+
+→ Adding principal
+- addprinc princ_name
+
+→ Deleting Principal
+- delprinc princ_name
+- yes
+
+→ Listing all principals
+- listprincs
+
+→ Getting information about a particular principal
+- getprinc princ_name
+- getprinc user1
+
+→ Change password for particular principal
+- cpw princ_name
+
+
+
+## if you forget to tick JCE then manually do this 
+## Download JCE(Java Cryptography extension) jar and copy it to proper location
+(Do this if you have not installed JCE jar during CM installation)
+on local machine:
+wget -c http://download.oracle.com/otn-pub/java/jce/7/UnlimitedJCEPolicyJDK7.zip
+scp -i key.pem UnlimitedJCEPolicy/US_export_policy.jar ubuntu@ip:/usr/lib/jvm/java-7-oracle-cloudera/jre/lib/security/
+(Do this for all hosts)
+
+
+***** Make Changes in these files *****
+clustercmd.sh and cluster
+
+
+***** Terminal *****
+## Open a new terminal on you local machine
+
+- cd Desktop
+- copy that files on desktop (clustercmd.sh and cluster)
+- ls
+- chmod +x clustercmd.sh
+
+./clustercmd.sh sudo useradd userb -u 1006
+./clustercmd.sh sudo useradd userc -u 1007
+./clustercmd.sh sudo useradd admin -u 1008
+./clustercmd.sh sudo useradd user2 -u 1009
+
+$ cat > cm
+<pu-dns-of-cm>
+
+$ ssh -i rafiq.pem ubuntu@$(cat cm)
+
+## Create a principal for hdfs superuser
+
+sudo kadmin.local
+addprinc hdfs@HADOOP.com
+
+## Create principal for other users
+
+addprinc usera
+addprinc userb
+addprinc admin
+addprinc user2
+addprinc userc
+
+##Go to any node 
+
+kinit -p hdfs 
+
+hdfs dfs -mkdir /user/jango
+
+
