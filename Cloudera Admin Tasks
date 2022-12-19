@@ -1,0 +1,1261 @@
+Cloudera Admin Task
+
+List Cloudera Admin Task
+1. Configurations
+2. Managing Users
+3. Monitoring
+4. Reports
+5. Log Search and Alerts
+6. Adding a host
+7. Decommissioning
+8. Recommissioning
+9. Snapshots
+10. Backup and Disaster Recovery
+11. Performance tuning
+
+Install Cloudera First
+AWS
+- Ec2
+- Instances
+- Launch Instances
+- Ubuntu 16
+- T2.2Xlarge
+- Storage : 100gb (You can select magnetic to minimize cost )
+- Name tag : cm
+- Security group : Default (all traffic : my ip)
+- Configure and Launch
+- Launch
+
+Terminal
+
+SSH in to the instance you created 
+- ssh -i prati.pem ubuntu@ip
+
+Update the server 
+-  sudo apt-get update && sudo apt-get dist-upgrade -y
+
+Disable transparent huge pages
+- sudo nano /etc/rc.local
+Add these lines:
+if test -f /sys/kernel/mm/transparent_hugepage/enabled; then
+    echo never > /sys/kernel/mm/transparent_hugepage/enabled
+fi
+
+if test -f /sys/kernel/mm/transparent_hugepage/defrag; then
+    echo never > /sys/kernel/mm/transparent_hugepage/defrag
+fi
+
+- sudo -i
+- source /etc/rc.local 
+
+Install NTP
+- sudo apt-get install ntp -y
+
+Set Swappiness
+- sudo sysctl vm.swappiness=1
+
+AWS
+- EC2
+- Instances
+- Action
+- Create Image
+- Cloudera 
+- Select no REBOOT
+- Create Image
+- Launch
+- t2.2Xlarge
+- Configure
+- 2
+- Advance Details
+(
+#!bin/bash
+sudo sysctl vm.swappiness=1
+)
+- Next
+- Next
+- Security group
+- Default
+- Launch
+
+
+For Worker Node
+- Launch Image
+- t2.large
+- Configure
+- 3
+- Advance Details
+(
+#!bin/bash
+sudo sysctl vm.swappiness=1
+)
+- Next
+- Next
+- Security group
+- Default
+- Launch
+
+Install and start CM 
+SSH into cloudera-manager host
+
+-  wget http://archive.cloudera.com/cm5/installer/latest/cloudera-manager-installer.bin
+-  chmod u+x cloudera-manager-installer.bin
+- sudo ./cloudera-manager-installer.bin
+- NEXT
+- NEXT
+- Yes
+- Next
+- OK
+- OK
+
+## in browser "public_ip_of_cm:7180" 
+18.210.15.5:7180
+username : admin
+password : admin 
+
+- Accept
+- Continue
+- Yes
+- Continue
+- Continue
+- Copy private DNS of 6
+- Search
+- Continue
+- Cluster Installation
+- Continue
+- Install
+- Continue
+- Continue
+
+In Enter Login Cedentials
+- Login To All Hosts As: 
+	- ubuntu
+- Authentication Method:
+	- all user accept same private key
+- Private Key File:
+	- upload private key 
+- Continue
+- Continue
+- Continue
+- Finish
+
+In Cluster Setup
+- Core Hadoop
+- Continue
+
+In Assign Roles
+(Balance Roles between 3 Masters)
+
+- On 2nd Master
+Add following Roles and Remove them From 1st master
+- Hue
+- Oozie
+- HS2
+- Zookeeper
+
+- On 3rd Master
+Add following Roles and Remove them From 1st master
+- Cloudera Management Service add on 3rd master
+- Zookeeper
+- HMS
+
+- Zookeeper must run on all three nodes
+
+- Continue
+- Test Connection
+- Continue
+
+In Cluster Setup
+- HDFS Block Size = 256MB
+- Continue
+- Continue
+- Finish
+Cloudera Admin Task 1
+Configuration
+
+Configuring hive remote metastore on CDH
+
+- Go on Cloudera
+- Hive
+- Instances
+	- Hive Metastore see id
+	- Find that id on AWS and also name it as HMS
+
+	- Hive Server 2 see id
+	- Find that id on AWS and also name it as HS2
+
+- We are going to install database on CM node
+	- So add SQL DB on CM nodes name
+	- Copy public ip of CM
+
+- Open terminal
+	- ssh -i pratiksha.pem ubuntu@public_ip   
+
+## Note : Cloudera recommends you configure a database for the metastore on one or more remote servers (that is, on a host or hosts separate from
+the HiveServer1 or HiveServer2 process). MySQL is the most popular database to use. 
+
+We will configure mysql db on a host different from HMS and HS2 service
+
+Install mysql 
+- sudo apt-get install mysql-server -y
+- It will ask you to set root user password st it as
+	- root
+	- root
+
+- Open Two more Terminal (Simultaneously run)
+1 On one terminal connect HMS
+	- ssh -i pratiksha.pem ubuntu@hms_public_ip
+
+2 On one terminal connect HS2
+	- ssh -i pratiksha.pem ubuntu@hs2_public_ip
+
+Install mysql connector 
+- Do this on 1 HS2 and 2 HMS hosts
+
+- sudo apt‐get install libmysql‐java 
+( If this didnt run then type it Mannually)
+
+---IMP---
+all related to Cloudera configuration, Directories, Files are located in /opt 
+
+- Before running this command check CDH version
+- On terminal
+	- cd
+	- cd /opt/cloudera/parcels/
+	- ls
+	- Copy CDH version and paste it in below command
+
+- sudo cp /usr/share/java/mysql-connector-java-5.1.38.jar /opt/cloudera/parcels/CDH-5.16.2-1.cdh5.16.2.p0.8/lib/hive/lib/
+
+- If it shows Error:No file or directory
+	- cd /usr/share/java
+	- ls 
+	- You will see connector jar version is also changed
+	- Copy it and paste it in Command
+
+- sudo cp /usr/share/java/mysql-connector-java-5.1.38.jar /opt/cloudera/parcels/CDH-5.16.2-1.cdh5.16.2.p0.8/lib/hive/lib/
+
+Secure mysql 
+(Its running on CM host)
+
+- sudo /usr/bin/mysql_secure_installation 
+[...] 
+Enter current password for root (enter for none): root
+OK, successfully used password, moving on...  
+No
+[...] 
+Set root password? [Y/n] y 
+New password: 
+Re‐enter new password: 
+Remove anonymous users? [Y/n] Y 
+[...] 
+Disallow root login remotely? [Y/n] N 
+[...] 
+Remove test database and access to it [Y/n] Y 
+[...] 
+Reload privilege tables now? [Y/n] Y 
+All done!
+
+Create database and user
+- mysql -u root -p
+(enter maually If didnt work ) 
+Enter password:
+root
+- mysql> CREATE DATABASE metastore;
+Shows: Query OK, 1 row affected (0.00 sec)
+- mysql> USE metastore;
+Shows: Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+
+- You have to update version number
+mysql> SOURCE /opt/cloudera/parcels/CDH-5.16.2-1.cdh5.16.2.p0.8/lib/hive/scripts/metastore/upgrade/mysql/hive-schema-1.1.0.mysql.sql;
+Shows: Some Output
+
+Creating user 
+- From AWS copy private DNS of HMS and paste it in place of 'metastorehost' (do not remove '')
+(Note : in the place of metastorehost use <pri-dns> of host on which HMS is running )
+
+- mysql> CREATE USER 'hive'@'ip-172-31-58-141.ec2.internal' IDENTIFIED BY 'mypassword'; 
+- mysql> REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'hive'@'ip-172-31-58-141.ec2.internal'; 
+- mysql> GRANT ALL PRIVILEGES ON metastore.* TO 'hive'@'ip-172-31-58-141.ec2.internal'; 
+- mysql> FLUSH PRIVILEGES; 
+- mysql> quit;
+
+Configure metastore service to communicate with the MySQL db
+
+- Do following on HMS host 
+- Update the version number
+
+- sudo nano /opt/cloudera/parcels/CDH-5.16.2-1.cdh5.16.2.p0.8/etc/hive/conf.dist/hive-site.xml
+
+- Comment the default Properties
+- In First Property 
+	-Copy Private DNS of CM(MySQLDB) and paste it 
+- In Second Last Property 
+	-Copy Private DNS of HMS and paste it
+- Copy all the property and paste it in hive-site.xml
+
+<property>
+  <name>javax.jdo.option.ConnectionURL</name>
+  <value>jdbc:mysql://ip-172-31-48-195.ec2.internal/metastore</value>
+  <description>the URL of the MySQL database</description>
+</property> 
+<property>
+  <name>javax.jdo.option.ConnectionDriverName</name>
+  <value>com.mysql.jdbc.Driver</value>
+</property>
+<property>
+  <name>javax.jdo.option.ConnectionUserName</name>
+  <value>hive</value>
+</property>
+<property>
+  <name>javax.jdo.option.ConnectionPassword</name>
+  <value>mypassword</value>
+</property> 
+<property>
+  <name>datanucleus.autoCreateSchema</name>
+  <value>false</value>
+</property>
+<property>
+  <name>datanucleus.fixedDatastore</name>
+  <value>true</value>
+</property>
+<property>
+  <name>datanucleus.autoStartMechanism</name>
+  <value>SchemaTable</value>
+</property>
+<property>
+  <name>hive.metastore.uris</name>
+  <value>thrift://ip-172-31-58-141.ec2.internal:9083</value>
+  <description>IP address (or fully‐qualified domain name) and port of the metastore host</description>
+</property>
+<property>
+<name>hive.metastore.schema.verification</name>
+<value>true</value>
+</property>
+
+## On HS2 node (In Video)
+
+- sudo nano /opt/cloudera/parcels/CDH-5.16.2-1.cdh5.16.2.p0.8/etc/hive/conf.dist/hive-site.xml
+
+- Comment existing Properties
+- And copy Paste This
+
+<property>
+  <name>hive.metastore.uris</name>
+  <value>thrift://ip-172-31-17-83.ec2.internal:9083</value>
+  <description>IP address (or fully‐qualified domain name) and port of the metastore host</description>
+</property>
+
+- hive
+- show databases;
+Shows: OK
+default
+Time taken: 3.973 seconds, Fetched: 1 row(s)
+
+- create database test;
+Shows: OK
+Time taken: 0.326 seconds
+- show databases;
+Shows: OK
+default
+test
+Time taken: 0.045 seconds, Fetched: 2 row(s)
+- exit;
+
+### Not on Script
+
+For Better Understanding
+<property>
+  <name>javax.jdo.option.ConnectionURL</name>
+  <value>jdbc:mysql://DNS of database of mysaql/database name</value>
+  <description>the URL of the MySQL database</description>
+</property> 
+
+---*** IMP ***---
+<property>
+  <name>hive.metastore.uris</name>
+  <value>thrift://DNS of metastore service:9083</value>
+  <description>IP address (or fully‐qualified domain name) and port of the metastore host</description>
+
+- Any service which wants to connect to connect to metastore service can connect to thrift server
+- You can not directly connect
+- thrift = provides cross platform connectivity
+
+
+## Note : hive.metastore.uris is the only property that must be configured on all
+hosts (client, metastore, HiveServer). Rest other properties are required only on metastore host
+
+- You can connect worker data nodes to hive service
+- On that nodes you have to configure only one property 
+
+<property>
+  <name>hive.metastore.uris</name>
+  <value>thrift://ip-172-31-17-83.ec2.internal:9083</value>
+  <description>IP address (or fully‐qualified domain name) and port of the metastore host</description>
+</property>
+
+
+Enabling High Availability for HDFS
+
+- Cloudera
+- HDFS
+- Action
+- Enable High Availability
+- Process as it is
+  or
+  Give name for name service
+- Continue
+
+Next you have to give hosts for Namenode
+as well as General Node
+
+- Namenode - Select Host
+	   - Select host on which Secondary NameNode is running or another master node
+- General Node - Select Host
+	       - select 3 Master Node
+- Continue
+- Click on General Nodes vale
+	- Edit those three = /jn
+(In this we are giving path so make sure 
+the directory is empty or give unique name)
+- Continue
+- Finish
+
+HDFS
+- Instances 
+- Add Role Instances
+- Select HttpFS
+	- Select host
+	- Select any namenode
+- Ok
+- Finish
+
+- Click on HttpFS
+- Action for Slected
+- Start
+- Start
+- Close
+
+Configuring Hue to Work with HDFS HA
+
+- Click on Cloudera Manager
+- Hue
+- Configuration
+- Look at HDFSWebInterface Role
+by default it is connected to Namenode we have to connect it to HttpFs
+- Select HttpFS
+- Save Changes
+- Status
+- Restart Now
+- Finish
+
+*** Rolling Restart ***
+
+- In Normal restart it will Stop Entire cluster.
+- The Main concept of HA is 0 Downtime
+- In Rolling Restart it will stop and start node one by one
+so their will be 0 downtime
+
+- Click on hive
+- Stop to see Dependable Services
+
+Upgrading the Hive Metastore to Use HDFS HA
+
+- Hue
+- Stop
+- Close
+
+- Oozie
+- Stop
+- Close
+
+- Hive
+- Action
+- Update Hive Metastore NameNodes
+- Update Hive Metastore NameNodes
+- Close
+
+Start Services Again
+- Hive
+- Action
+- Start
+- Close
+
+- Oozie
+- Action
+- Start
+- Close
+
+- Hue
+- Action
+- Start
+- Close
+
+ RM HA 
+
+- Yarn
+- Action
+- Enable High Availability
+
+Configuration Page will open
+- Resource Manager Hosts - Select a host
+- Start rm on which it already not present
+- OK
+- Finish
+
+Extra Configuration for RM HA  
+
+Resource Manager HA doesn't affect the Job History Server (JHS). JHS doesn't
+maintain any state, so if the host fails you can simply assign it to a new host. You
+can also enable process auto-restart by doing the following:
+
+- Yarn
+- Configuration
+- Select Filter - JobHistory Server.
+- Select Category - Advanced.
+- Search Automatically Restart Process property or search for it by typing its
+name in the Search box.
+- Tick It
+- Save Changes
+- Check Status if it tells to restart
+- It Dosn’t need to restart status shows
+
+HIVE HA 
+
+Hive their are 2 Services
+1. HMS
+2. HS2
+
+HMS HA 
+
+- You can configure HMS on more than one node
+- At any pint of time they will be active
+- And the load will be divided
+- If any one goes down, another continues to serve
+
+- Hive
+- Instances
+- Add role for HMS
+- Select host - Add HMS on another node
+( Start rm on which it already not present )
+- Continue
+- Finish
+- Tick on Hive metastore
+- Action for Selected 
+- Start
+- Close
+
+- It gives restart 
+- Restart
+- Restart now
+- Finish
+
+- Hive
+- Instances
+- You can see it shows stat as orange
+After some time it will become green
+
+- Cloudera Manager
+- Hive 
+Hive MetaStore Canary
+Canary is initial test perform by cloudera Manager 
+to start new service.
+- Close  
+
+
+HiveServer2 High Availability
+
+- You can start HS2 role more than one nodes
+- If you start2 HS2 role then both will be active at any point of time
+- Both will serve the client request
+- Load balance will be done automatically
+- If any one goes down then other will serve Continue
+- In HS2 HA we will use zookeeper dynamic Service discovery
+
+Zookeeper Dynamic Discovery
+- It will load balance between multiple HS2
+- If anyone goes down the zookeeper makes sure that in real time no request are send to HS2 role which is right now down.
+- Once we unable HS2 HA then the next thing is if you want to connect to HS2 we connect through beeline and we will use zookeeper
+- And tell Zookeeper to automatically load balance and connect to one of the HS2 node
+
+### If you are using remote metastore Deployment Cluster on that do this extra configure
+                                OR
+### If you are doing multiple Pratical at a time
+                     then perrform these two Steps
+### Install driver jar on host where you plan to start your second HS2 (not for first time)
+
+- sudo apt-get install libmysql-java
+- sudo cp /usr/share/java/mysql-connector-java-5.1.38.jar /opt/cloudera/parcels/CDH-5.16.2-1.cdh5.16.2.p0.8/lib/hive/lib/
+
+### if on new Cluster Start From Here
+
+- Cloudera
+- Hive
+- Instances
+- Add Role Instances
+- Hive Server 2
+- Add it to another Instance
+- Ok
+- Continue
+- Click on HiveServer 2 
+- Action for Selected
+- Start 
+- Start
+- Close
+- Status
+
+Enable Dyanamic service discovery
+
+- Hive 
+- Configuration 
+- Category - Advanced 
+- Search - hiveserver2 Advanced Configuration snippet 
+- HiveServer2 Advanced Configuration Snippet (Safety Valve) for hive-site.xml
+- Add
+	Name : hive.server2.support.dynamic.service.discovery 
+	Value : true
+	(Leave final unchecked)
+- Save Changes
+- Status
+- Restart
+- Restart State Service
+- Restart Now
+- Finish
+
+
+- How to check Working
+- Hive
+- Instances
+- Hive server 2 is running on 2 instances (Check id of any 1 instance on cloudera 
+and check that id in aws and copy their public id for script)
+
+- On terminal 
+ssh -i prati.pem ubuntu@ip_of_one_hs2node
+
+- Connect through beeline
+- beeline
+- !connect jdbc:hive2:
+//Zookeeper_Private_DNS_1:2181,Zookeeper_Private_DNS_2:2181,Zookeeper_Private_DNS_3:
+2181/;serviceDiscoveryMode=zooKeeper;zooKeeperNamespace=hiveserver2
+
+-In zookeeper youll get id
+!connect jdbc:hive2://Zookeeperid1:2181,zookeeperid2:2181,zookeeperid3:2181/;
+serviceDiscoveryMode=zooKeeper;zooKeeperNamespace=hiveserver2
+
+- We are telling zookeper to connect one of the hive server 2
+- Copy Paste command
+
+- It will ask for username like this. give username as hive
+Enter username for jdbc:hive2://ip-172-31-49-236.ec2.internal:2181,ip-172-31-48-233.ec2.internal:2181,ip-172-31-48-56.ec2.internal:2181/;serviceDiscoveryMode=zooKeeper;zooKeeperNamespace=hiveserver2: hive
+
+- It will ask for password like this. give password as hive
+Enter password for jdbc:hive2://ip-172-31-49-236.ec2.internal:2181,ip-172-31-48-233.ec2.internal:2181,ip-172-31-48-56.ec2.internal:222222181/;serviceDiscoveryMode=zooKeeper;zooKeeperNamespace=hiveserver2: ****
+
+- After Successful connection it will show below msg than exit
+20/07/16 14:59:19 [main]: INFO jdbc.HiveConnection: Connected to ip-172-31-48-56.ec2.internal:10000
+Connected to: Apache Hive (version 1.1.0-cdh5.16.2)
+Driver: Hive JDBC (version 1.1.0-cdh5.16.2)
+Transaction isolation: TRANSACTION_REPEATABLE_READ
+0: jdbc:hive2://ip-172-31-49-236.ec2.internal> exit
+
+- Check on which HS2 it is connected by id
+
+- Cluster
+- Hive
+- Search that id
+
+To Check Databases
+
+show databases
+- it will show databases
+exit;
+
+- Cloudera Manager is tool developed by Cloudera which provides centralize interface
+for automated deplyment of hadoop cluster (CDH)
+- It also provides centralize interface for configuaring, managing, securing your
+hadoop Cluster
+- It also show us Health Check through Green orange yellow and red color
+
+terminal
+connect to any datanode
+
+Cloudera Admin Task 2
+User management in cloudera
+
+- Administration
+- Users
+It will show user management
+
+Remeber that the users if CDH and CM are different in oraganisation
+
+if you have user in cloudera
+you have to create user with same name at linux level
+
+- Add User 
+- name prati
+  pws:
+  rpwd:
+  role: Cluster administrator
+- Ok
+
+
+Cloudera Admin Task 3
+Monitoring
+
+
+- AWS Cloud Watch
+- For hadoop we use Cloudera Manager as built in capabilites
+- Real time monitoring happens with the help of charts
+
+- For customize charts
+- Charts
+- Select
+- selet any
+- It shows types of chart
+- Select any
+- Shows output
+- Save
+- Give name
+- Ask for Dashboard
+- Name
+- save
+
+You can see your dashboard in Charts
+
+        
+Cloudera Admin Task 4
+Reporting
+
+- Clusters
+- Reports
+- You can see some pre build Reports
+
+
+Cloudera Admin Task 5
+Log Search and Reports
+
+LOGS
+- Logs are part of Troubleshooting
+- When there comes a question about Troubleshooting your first answer should be
+that we will check LOGS
+- Location of logs is /var/log
+- Job History Server shows log only after completion
+It will not show logs of running process
+- cloudera provides centralize interface for Logs
+- And that place is DIGANOSTICS
+
+
+- Click Dignostic
+- logs
+- Sources
+- Yous can check on services which logs you want to see
+
+- HDFS
+- Log Level 
+	-TRACE (When java program run their is trace)
+	-DEBUG (Step by step info of program)
+	-INFO (Give information logs)
+	-WARN (Warning)
+	-ERROR (When someyhing wrong with step)
+	-FATAL (Something has stop)
+(Log Level are important to remember in perspective of interview)
+
+
+ALARTS
+- Some prebuild alarts in Cloudera Manager
+
+To configure alart
+- Click Dignostic
+- logs
+- Sources - Click on all sources
+- Log Level - Warning
+- Suppose there is warning for zookeeper by the name caught end 
+of stream exception and you want to get alart
+- Copy "cought end of stream excption" 
+- Cloudera Manager
+- Zookeeper
+- Configuration
+- In search type the word "extract"
+	- shows Rules to Extract Events from log file
+	- Click on plus (at last line)
+	- Select Alart
+	- Rate : 1 
+	- Period : 1min (Means 1 warning per min)
+	- Threshould : Warn
+	- Contents : paste "end of stream excption"
+	- Exception Type : 
+- Save
+- Restart
+- Restart
+- Restart Now
+- Finish
+
+Cloudera Admin Task 6
+Adding a host / Commissioning
+
+Means adding a new node
+What pre-reqvisits you need to do ?
+
+- AWS
+- EC2
+- Launch Instance
+- Choose ami - ubuntu16
+- T2
+- Add Storage - 100gb
+- Tag – Commission b worker node
+- Security Group - Existing SG
+- Key
+- Launch
+
+IMP POINT
+When you do in house Installation in place of cloud
+you have to set up the network
+and ping from every node to new node to check connection
+
+Perform Pre-rqvisits on it
+
+- ssh -i prati.pem ubuntu@public_ip 
+
+Update the server
+sudo apt-get update && sudo apt-get dist-upgrade -y
+
+Disable transparent huge pages
+- sudo nano /etc/rc.local
+
+Add these lines:
+if test -f /sys/kernel/mm/transparent_hugepage/enabled; then
+    echo never > /sys/kernel/mm/transparent_hugepage/enabled
+fi
+
+if test -f /sys/kernel/mm/transparent_hugepage/defrag; then
+    echo never > /sys/kernel/mm/transparent_hugepage/defrag
+fi
+
+- sudo -i
+- source /etc/rc.local 
+
+Install NTP
+- sudo apt-get install ntp -y 
+
+Set Swappiness
+- sudo sysctl vm.swappiness=1
+
+On Cloudera 
+- Hosts
+- All Hosts
+- Add a new Host to the Cluster
+- Classic Wizerds 
+- Continue
+
+- Copy private DNS of new node
+- Paste it
+- Search
+- Continue
+- Select Repository : Continue
+- java Continue
+- Provide key Continue
+- Continue
+- Continue
+- Continue
+- Continue
+- Done
+
+- Status
+- HDFS
+- Instances
+- Add role Instances
+- Data Node 
+- Select Hosts
+- Which is without any role Click
+- Ok
+- Continue
+- Finish
+- Restart
+- Close
+
+- HDFS
+- Instances
+- You can see that data node role is tope
+- Click 
+- Action for Selected
+- Start
+- Start
+- Close
+
+To start worker node means we need to start BOTH 
+1. Data Node and 2.Node Manager
+
+To Start Node Manager
+- Yarn
+- Instances
+- Add role instances
+- Click on Node Manager
+- Add role to newly created node
+- Continue
+- Finish
+- Next
+- Next
+
+Start the Role
+- Yarn 
+- Select node
+- Action for Selected 
+- Start
+- Start
+- Close
+
+Cloudera Admin Task 7
+Decommissioning
+
+- Cloudera Manager
+- HDFS
+- Instances
+- Select Node (DataNode)
+- Action For Slected
+- Decommission
+- Close
+
+To check decommission status
+1. Way
+- Cloudera Manager
+- HDFS
+- Instances
+
+2. Way
+- NameNode Web UI
+- Scroll Live nodes info
+and Decommission info
+
+Note : 
+- If you take down one of the worker node Down (It has some blocks)
+we decommission it so it should show UNDER REPLICATED BLOCKS
+- But when you go on namenode under replicated blocks it shows 0
+So what happens in background ???
+- When you perform decommissioning using cloudera manager
+it performs GRACEFUL DECOMMISSIONING
+GRACEFUL DECOMMISSIONING means it automatically rebalance the cluster
+
+IMP for Interview
+Q: When we decommission the node does it show under replicated block ???
+ANS: We perform DECOMMISSIONING using cloudera Manager and when we cloudera 
+manager for decommissioning it performs GRACEFUL DECOMMISSIONING. Which means
+that when it performs decommissioning instantly along with the decommissioning
+process it will balance the cluster at same time.  
+
+Cloudera Admin Task 8
+Recommissioning
+
+Recommissioning means commissioning the Decommission node
+
+- Cloudera Manager
+- HDFS
+- Instances
+- Select Node 
+- Action For Slected
+- Recommission
+- Close
+
+It will show stop state
+- Select
+- Action for Selected
+- Start
+- Start
+- Close
+
+Cloudera Admin Task 9
+Snapshots
+
+Snapshot takes metadata backup of that directory
+
+Snapshot
+- First we have to see basic how to take screenshot
+- Sometimes it shows bugs
+- Cloudera
+- HDFS
+- File Browser
+- user
+- hive
+- enable snapshots
+- enable snapshots
+- close
+- Take snapshot
+- Name
+- Ok
+
+- You can schedule snapshots
+
+- Cloudera
+- Backup
+	- You will see three things
+	1. Replication Schedules
+	2. Peers
+	3. Snapshot Policies
+- Snapshot Policies
+- Create Snapshot Policy
+	Name:
+	Path:
+(You can only see one Path there because in order to take snapshot
+first you have to allow/enable snapshot)
+	Scheduling:
+(Weekly snapshot to take 2)
+	Alarts:
+(On Success and on Failure)
+
+
+Cloudera Admin Task 10
+Backup and Disaster Recovery
+(Remaining)
+
+- Basically have three things:
+	- 1.NameNode metadata Backup
+	- 2.Snapshots
+	- 3.Cluster Backup
+
+Q> When you have question in intwerview about backup and disaster recovery
+you have to say :
+In our oraganisation we have a complete backup and disaster recovery plan that
+we have created. Under that backup and disaster recovery plan what we do is first we take namenode metadata backup, next we take snapshot of imp direcories and third we take complete cluster backup.
+
+1> Same as apache hadoop admin task
+2> Snapshot : (Snapshot Policies)
+3> Cluster Backup
+
+- Two Option:
+	1.CLUSTER TO CLUSTER BACKUP
+	2.CLUSTER TO S3 BACKUP
+
+Q> Technically is there a need to perform a backup ?
+	- Data stored in hdfs
+	- It has replication factor (3 copies)
+	- it is Resilient, Durable, Self healing.
+- Concept of backup is
+	- One copy for production
+	- One copy for backup
+- But here we have 3 copies in Cluster.
+already we are having 2 copies for resisting failure.
+- HDFS has a in build backup in it.
+- So technically their is no need.
+- But from Client perspective
+	- 95% client are not from it background
+	- In our field data mgmt before big data Oracle is leader.Oracle syatem
+	hire one person to take backup and monitoring
+	- So client are used to see prooduction and backup copy
+	- So they have that mindset
+	- In order to satisfy client requirment we take backup.
+
+1.CLUSTER TO CLUSTER BACKUP
+
+Cluster to Cluster :
+- Production cluster and BDR (backup and disaster recovery) Cluster
+
+- Cloudera 
+- Backup
+- Peers
+- Add Peer
+- Neme: BDR
+- URL: private url:7183
+
+
+2. Single Cloudera Manger Managing Multiple Cluster have two types
+1. Two Different Cluster manage by different cloudera manager
+	- use distcp
+2. Two Different Cluster manage by different same cloudera manager
+	- Here you dont need to set peer
+	- We will see this                    
+- We have one cluster consider it as prod cluster
+- For BDR cluster we need 4 nodea
+	- 1 Master Node
+	- 3 worker Node
+- On BDR we are not performing any operation
+
+
+- AWS
+- Launch Instance
+- T2_2xlareg
+- 100GB
+- Nametag Master cluster 2
+- Default Security Group
+- Launch
+
+- T2large
+- 3 
+- 100 GB
+- Tag: Worker
+- Default Security Group
+- Launch
+
+- We need to perform Prerequisites
+
+Terminal
+- Open 4 terminal
+- Connect to 4 instances
+- perform on 4 terminals
+
+Update the server
+- sudo apt-get update && sudo apt-get dist-upgrade -y
+
+if test -f /sys/kernel/mm/transparent_hugepage/enabled; then
+    echo never > /sys/kernel/mm/transparent_hugepage/enabled
+fi
+
+if test -f /sys/kernel/mm/transparent_hugepage/defrag; then
+    echo never > /sys/kernel/mm/transparent_hugepage/defrag
+fi
+
+- sudo -i
+- source /etc/rc.local
+
+Install NTP 
+- sudo apt-get install ntp -y
+
+Set Swappiness
+sudo sysctl vm.swappiness=1
+
+- Done With Prereqvisite
+- Now add this cluster to cloudera manager
+- Go to Cloudera click on Add Cluster
+
+- Classic wizard
+- Copy and Paste private DNS one by one
+- Search
+- Next
+- Next
+- continue
+- another user ubuntu
+- add .pem key
+- Next
+- Install agents 
+- Next
+- Finish
+
+- Cluster Setup
+-(we dont need extra service for backup)
+- Custom Service
+- HDFS
+- HIVE
+- YARN
+- Zookeeper(optional)
+- Next
+- block size 256
+- let the cluster start
+- Continue
+
+You can see two cluster on cloudera
+
+Backup using Replication Schedules
+- Cloudera
+- Backup
+	- You will see three things
+	1. Replication Schedules
+	2. Peers
+	3. Snapshot Policies
+
+1. Replication Schedules
+- Create Schedule
+- Yow woll see 
+	- HDFS Replication
+	- Hive Replication
+- Select HDFS Replication
+- Name:
+- Source: HDFS(cluster 1)
+- Source Path:/
+(there is a bug in cloudera when you give / so give it as /user)
+- Destination: /backup1
+- Schedule: Immediate
+- Run as Username:
+- Run on Peer as username:
+(This user need permission on both directories)
+- Save Schedule
+
+On terminal
+(on backup clusters master node or datanode)
+- sudo su hdfs
+- cd
+- ls /hdfs dfs -ls /backup1
+- ls /backup1/user
+
+Q> How frequently you take backup ?
+NameNode metadata Backup - Once in week (Every Monday at 12)
+Snapshots - Twice a Week
+Cluster Backup - Half Yearly
+The client said they want this backup
+
+2.CLUSTER TO S3 BACKUP / Cloud Backup
+
+- If you want to save data from cluster to AWS S3 you have to provide
+Authentication 
+- There are two methods to provide authentication
+1. Credentials
+2. IAM Roles
+
+- S3 is special storage. you can store cluser data in s3 as well as
+we can directly fire SQL Queries from cloudera on S3.
+
+Hoe to configure ?
+
+- Cloudera
+- Administration
+- External Accounts
+- AWs Credentials
+*** AWS reommends IAM Roles***
+- Add Access key Credentials
+(Copy and paste from aws (under acc name))
+- S3 Guard makes sure that s3 does not give inconsistant data 
+- Change me (Give region name (us-east1))
+- Save
+- Cluster access to S3
+	- unable for cluster1
+	- continue
+	- restart
+	- Done
+- you can see S3 connector on cloudera page
+
+- Backup
+- Replication Schedule
+- Create Schedulr
+- HDFS
+- Name: CloudBDR
+Source: HDFS(Cluster1)
+Source Path: /
+(/user for praticle)
+Destination : Mycred(AmazoneS3)
+Destination Path: s3a://bucketname/
+*** / slash is important
+(AWS <S3 <copy Bucketname)
+-
+-
+- Schedule
+
+- AWS
+- S3
+- Bucket
+- You can see backup
+
+Q> Which one is better cluster to cluster or cluster to S3 ???
+cluster to s3 backup / cloud backup is better
+- Becoz its cost efficient
+- 99.99% availability
+- 11 9's durability
+- 2 concurrent data centers failure tolerance
+
+S3 data on Hue
+- Hue
+- Web UI
+- 2nd option
+- admin admin
+- S3
+- you will see bucket
+
+Cloudera Admin Task 11
+Performance Tuning
+
+How to Stop
+- On Cluster right click and stop
+- AWS copy ip of CM 
+- Terminal Connect
+  ssh -i pratiksha.pem ubuntu@
+- sudo service cloudera-scm-server stop
+- instances stop 
+
