@@ -1,0 +1,265 @@
+Configurind LDAP as a backend for HUE
+
+- Cloudea
+- HUE
+- Web UI
+- 2nd option 
+The moment you open the hue page you will see login Window.
+
+- LDAP: package ldap. Open source directory service.
+
+LDAP Server :
+
+LDAP 
+SERVER
+LDAP Client
+LDAP Client
+LDAP Client
+
+
+
+
+
+
+- Suppose there is LDAP server connected to multiple LDAP client on a cluster. On all this system if you created account on this cluster.  
+-You can access your account from any system.
+
+What we have to Do:
+1. LDAP server on CM 2. LDAP client on HUE
+3. And establish communication between Server-Client
+4. Connect (In HUE configure LDAP as backend)
+
+
+		Hue authentication with LDAP
+
+Our CM have already Load.
+So we will install it on new instance.
+
+Amazon
+- if other host is on ubuntu14 then select it otherwise take ubuntu16
+- ubuntu 16
+- T2 or t2.xlarge (t3a)
+- Next
+- Tag : LDAP-Server
+- Select Default Security Group
+- Review
+- Launch
+
+Terminal
+
+- ssh -i <key.pem> ubuntu@ip
+-  sudo apt-get update
+- sudo apt install slapd ldap-utils -y
+- Remember pwd
+	root
+- Confirm
+	root
+To check it is running or not
+- systemctl status slapd
+It Shows active and running
+
+Configure ldap
+
+- sudo dpkg-reconfigure slapd
+- omit - No
+- DNS doamin name : hadoop.com
+- Organisation name : cloudera
+- Administrative Password: root (set before)
+- Configure Password : root
+- db backend : mdb
+- Remove database when slapd is purged : no
+- Move old database : yes
+- Use ldap v2 : no
+
+- sudo nano /etc/ldap/ldap.conf
+Change it
+-remove hash
+BASE    dc=hadoop,dc=com
+URI     ldap://localhost
+- Save
+- Exit
+- ldapsearch -x
+Shows info
+
+ Install Phpldapadmin 
+
+Two Method:
+1. Through Command Line
+2. phpldapadmin web UI
+
+- sudo apt install phpldapadmin -y 
+
+Connect to phpldapadmin
+
+Browser
+- public_ip_of_LDAP_SERVERphpldapadmin
+(In browser – dns/phpldapadmin)
+3.230.143.28/phpldapadmin
+
+- Click on Login
+login is not Configured
+
+Configure phpldapadmin 
+
+- sudo nano /etc/phpldapadmin/config.php
+- Cmtrl+w
+- search : $servers->setValue('server','port',389);
+- uncomment this line by removing slash : $servers->setValue('server','port',389);
+
+change below lines (in place of example hadoop)
+$servers->setValue('server','base',array('dc=hadoop,dc=com'));
+
+Search uncomment change it to false
+search -> $servers->setValue('login','anon_bind',true);
+make it to false
+
+Search uncomment and make it true
+search -> $config->custom->appearance['hide_template_warning'] = false;
+make it to true
+
+save and exit
+
+Connect to phpldapadmin
+ 
+In browser 
+- ip/phpldapadmin
+- login
+- remove example and type hadoop
+- root
+- Autenticate
+
+
+Create groups and users
+
+- Click on dc hadoop dc com → click plus
+- dc hadoop dc co
+- Click on create a new entry here
+- Click on Generic: Organisational Unit
+- type hue
+- Create object
+- Commit
+Now,
+- Click on ou=hue
+- Create a child entry
+- Click on Generic POSIX group by name type hue users
+- Create object
+- Commit
+
+Now,
+- Click on ou=hue plus sign
+- Click on cn =hueuser
+- Make a child entry
+- Generic user account
+- Give user name : user1 
+user1
+hueusers
+/home/users/user1
+user1
+shell: select any
+pwd: user1
+userid: user1
+(Make sure uids dont match with Linux uids)
+- Create object
+- Commit
+Four digit user id already been used by Linux so ldap dosnt create user
+so make it 5 digit
+uidNumber
+- Update
+
+Create another user (Check Once)
+
+- Click on ou=hue
+- Create a child entry
+
+- Generic user account
+- Give user name : userB
+userB
+hueusers
+/home/users/userB
+userB
+shell: select any
+pwd: userB
+userid: userB
+(Make sure uids dont match with Linux uids)
+- Create object
+- Commit
+Four digit user id already been used by Linux so ldap doesn't create user
+so make it 5 digit
+- Update
+
+
+Configure hue to work with LDAP 
+
+On instance in which hue is running
+- HUE
+- Instances
+- Check ip where hue is running
+- Check that ip on AWS
+- Name it hue
+
+Terminal
+
+- ssh -i prati.pem ubuntu@ip
+
+Install Ldap client on machine on which hue is running
+- sudo apt-get install libpam-ldap nscd -y
+libpam is client lib
+nscd package automatically creates account on linux
+
+- URI : ldap://ip-10-0-0-70.ec2.internal
+( ldap://private_DNS_LDAP_server )
+- distinguished name : dc=hadoop,dc=com
+- ldap version : 3
+- Make local root database admin : yes
+- ldap reuire database login : no 
+- ldap account for root : cn=admin,dc=hadoop,dc=com
+- ldap root passwor : root
+
+- sudo auth-client-config -t nss -p lac_ldap
+
+Check Configuration
+- sudo nano /etc/nsswitch.conf
+(it should show ldap)
+
+- sudo nano /etc/pam.d/common-session
+- At last copy & paste this line
+session required    pam_mkhomedir.so skel=/etc/skel umask=0022
+- Save
+- Exit
+- sudo /etc/init.d/nscd restart
+- getent passwd
+On Linux level we establish the client-server connection
+
+Cloudera
+
+- Hue
+- Configuration
+search → authentication → select → desktop.auth.backend.LdapBackend → save
+search → ldap_url → ldap://Private_DNS_of_LDAP:389 → save
+search → username_pattern → copy & paste → uid=<username>,ou=hue,dc=hadoop,dc=com → save
+search → search_bind → tick 
+search → base_dn → dc=hadoop,dc=com → save
+search → bind_dn → cn=admin,dc=hadoop,dc=com → save
+search → bind_password → root (password-set) → save
+search → user_filter → copy & paste → objectClass=* → save
+search → user_name_attr → uid → save
+search → group_filter → objectClass=posixGroup → save
+
+- Restart Hue
+- Restart state services
+-  tick on: redeploy client configurations
+- Restart now
+- Finish
+
+Login to Hue web ui
+-  Hue
+- web ui
+- admin admin
+Shows invalid
+- user1 user1
+- signin
+
+If you want to give authentication to admin add admin though user1
+- user1
+- manage user
+- Add Sync LDAP use
