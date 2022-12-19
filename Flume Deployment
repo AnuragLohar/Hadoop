@@ -1,0 +1,272 @@
+fFlume
+
+First we need to deploy cloudera
+
+AWS
+- Ec2
+- Instances
+- Launch Instances
+- Ubuntu 16
+- T2.2Xlarge
+- Storage : 100gb
+- Name tag : cm
+- Security group : Default (all traffic : my ip)
+- Configure and Launch
+- Launch
+
+
+Terminal
+
+SSH in to the instance you created 
+- ssh -i <key.pem> ubuntu@34.224.15.82
+
+Update the server 
+- sudo apt-get update && sudo apt-get dist-upgrade -y
+
+Disable transparent huge pages
+- sudo nano /etc/rc.local
+Add these lines:
+if test -f /sys/kernel/mm/transparent_hugepage/enabled; then
+    echo never > /sys/kernel/mm/transparent_hugepage/enabled
+fi
+
+if test -f /sys/kernel/mm/transparent_hugepage/defrag; then
+    echo never > /sys/kernel/mm/transparent_hugepage/defrag
+fi
+- sudo -i
+- source /etc/rc.local 
+
+Install NTP
+- sudo apt-get install ntp -y
+
+Set Swappiness
+- sudo sysctl vm.swappiness=1
+
+Note : Now, save the instance to an image, call it “Cloudera Manager” Make sure to 
+check “No reboot”
+
+AWS
+- EC2
+- Instances
+- Action
+- Create Image
+- Cloudera 
+- Select no REBOOT
+- Create Image
+- Launch
+- t2.2Xlarge
+- Configure
+- 2
+- Advance Details
+(
+#!bin/bash
+sudo sysctl vm.swappiness=1
+)
+- Next
+- Next
+- Security group
+- Default
+- Launch
+
+
+For Worker Node
+- Launch Image
+- t2.large
+- Configure
+- 3
+- Advance Details
+(
+#!bin/bash
+sudo sysctl vm.swappiness=1
+)
+- Next
+- Next
+- Security group
+- Default
+- Launch
+
+Install and start CM 
+SSH into cloudera-manager host
+- wget http://archive.cloudera.com/cm5/installer/latest/cloudera-manager-installer.bin
+- chmod u+x cloudera-manager-installer.bin
+- sudo ./cloudera-manager-installer.bin
+- NEXT
+- NEXT
+- Yes
+- Next
+- Yes
+- OK
+- OK
+
+## in browser "public_ip_of_cm:7180" 
+18.210.15.5:7180
+username : admin
+password : admin 
+
+- Accept
+- Continue
+- Yes
+- Continue
+- Continue
+- Copy private DNS of 6
+- Search
+- Continue
+- Cluster Installation
+- Continue
+- Install
+- Continue
+- Continue
+
+In Enter Login Credentials
+- Login To All Hosts As: 
+	- ubuntu
+- Authentication Method:
+	- all user accept same private key
+- Private Key File:
+	- upload private key 
+- Continue
+- Continue
+- Continue
+- Finish
+
+In Cluster Setup
+- Core Hadoop
+- Continue
+
+In Assign Roles
+(Balance Roles between 3 Masters)
+
+- On 2nd Master
+Add following Roles and Remove them From 1st master
+- Hue
+- Oozie
+- Zookeeper
+
+- On 3rd Master
+Add following Roles and Remove them From 1st master
+- Cloudera Management Service add on 3rd master
+- Zookeeper
+
+- Zookeeper must run on all three nodes
+
+- Continue
+- Test Connection
+- Continue
+
+In Cluster Setup
+- HDFS Block Size = 256MB
+- Continue
+- Continue
+- Finish
+
+ Install service flume on Cloudera and configure agent on CM host
+
+CM 
+- Cluster
+- Add service
+- Flume
+- Continue
+- Select Agent: CM node
+- Continue
+- Finish
+
+- Flume
+- Configuration 
+- Search agent
+-  Agent Name : MyAgent
+   'Configuration File' : Copy Paste following lines
+Change the DNS of Namenode (Cluster→ HDFS→ Instances→ NamenodeDNS)
+
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+
+# The configuration file needs to define the sources, 
+# the channels and the sinks.
+# Sources, channels and sinks are defined per agent, 
+# in this case called 'MyAgent'
+
+MyAgent.sources = mysource
+MyAgent.channels = MemChannel
+MyAgent.sinks = HDFS
+
+MyAgent.sources.mysource.type = seq
+MyAgent.sources.mysource.channels = MemChannel
+
+MyAgent.sinks.HDFS.channel = MemChannel
+MyAgent.sinks.HDFS.type = hdfs
+MyAgent.sinks.HDFS.hdfs.path = hdfs://ip-172-31-46-49.ec2.internal:8020/user/flume/
+MyAgent.sinks.HDFS.hdfs.fileType = DataStream
+MyAgent.sinks.HDFS.hdfs.writeFormat = Text
+MyAgent.sinks.HDFS.hdfs.rollInterval = 0
+MyAgent.sinks.HDFS.hdfs.rollCount = 100
+MyAgent.sinks.HDFS.hdfs.useLocalTimeStamp = true
+MyAgent.sinks.hdfs.serializer = Text
+
+
+MyAgent.channels.MemChannel.type = memory
+MyAgent.channels.MemChannel.capacity = 10000
+MyAgent.channels.MemChannel.transactionCapacity = 100	 
+
+- Save Changes
+
+Create HDFS directory for flume sink
+Connect to hdfs node
+- ssh -i prati.pem ubuntu@ipofhdfsnode
+Set password for hdfs
+- sudo passwd hdfs
+- root
+- root
+ - su hdfs
+- cd
+- hdfs dfs -mkdir /user/flume/
+- hdfs dfs -chown -R flume:flume /user/flume
+- hdfs dfs -chmod -R 770 /user/flume
+
+Start the agent 
+- Status
+- Action
+- Start
+- Close
+- Finish
+- Cloudera Manager
+
+Connect to CM where Flume is.
+
+- ssh -i prati.pem ubuntu@ip
+- cd /opt/cloudera/parcels
+- ls
+- Copy & Paste Parcel name
+- cd
+
+- sudo /opt/cloudera/parcels/CDH-5.16.2-1.cdh5.16.2.p0.8/etc/init.d/flume-ng-agent status
+Shows: * Flume NG agent is not running
+
+We need to manually start it
+- sudo /opt/cloudera/parcels/CDH-5.16.2-1.cdh5.16.2.p0.8/etc/init.d/flume-ng-agent start
+Shows: * Starting Flume NG agent daemon (flume-ng-agent): 
+
+Check for output
+Cloudera
+- HDFS
+- File Browser
+- User
+- Flume
+- You can see the data generate through stream Generator.
+With name FlumeData
+Check on net : Flume 1.9.0 User Guide – Apache Flume
+You need to know 3-4 Sources, Syncs, Metrics.
