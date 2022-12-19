@@ -1,0 +1,462 @@
+Kerberos - Active Directory
+
+Install Cloudera Manager
+AWS
+- Services
+- EC2
+- Launch Instance
+- Search ubuntu 16
+- t2.2XLarge
+- Storage 100GB
+- Default Security Group
+- Next
+- Next
+- Launch Instance
+- Default
+- Inbound Rules
+- My IP
+
+Terminal 
+- cd Downloads
+
+SSH in to the instance you created 
+- ssh -i <key.pem> ubuntu@54.162.76.95
+
+Update the server
+- sudo apt-get update && sudo apt-get dist-upgrade -y
+
+Disable transparent huge pages
+- sudo nano /etc/rc.local
+
+Add these lines:
+if test -f /sys/kernel/mm/transparent_hugepage/enabled; then
+    echo never > /sys/kernel/mm/transparent_hugepage/enabled
+fi
+
+if test -f /sys/kernel/mm/transparent_hugepage/defrag; then
+    echo never > /sys/kernel/mm/transparent_hugepage/defrag
+fi
+
+- sudo -i
+- source /etc/rc.local 
+
+Install NTP 
+- sudo apt-get install ntp -y 
+- sudo service ntp start 
+
+Set Swappiness
+- sudo sysctl vm.swappiness=1
+
+AWS 
+- EC2
+- Instances
+- Action
+- Image
+- Create Image
+- Cloudera 
+- Select no REBOOT
+- Create Image
+
+- Launch
+- t2.2Xlarge
+- Configure
+- 2
+- Advance Details
+(
+#!bin/bash
+sudo sysctl vm.swappiness=1
+)
+- Next
+- Next
+- Security group
+- Default
+- Launch
+
+For Worker Node
+- Launch Image
+- t2.large
+- Configure
+- 3
+- Advance Details
+(
+#!bin/bash
+sudo sysctl vm.swappiness=1
+)
+- Next
+- Next
+- Security group
+- Default
+- Launch
+
+Install and start CM 
+
+SSH into cloudera-manager host
+- wget http://archive.cloudera.com/cm5/installer/latest/cloudera-manager-installer.bin
+- chmod u+x cloudera-manager-installer.bin
+ sudo ./cloudera-manager-installer.bin
+
+- NEXT
+- NEXT
+- Yes
+- Next
+- Yes
+- OK
+- OK
+
+## in browser "public_ip_of_cm:7180" 
+
+18.210.15.5:7180
+
+username : admin
+password : admin 
+
+- Accept 
+- Yes
+- Continue
+- Continue
+
+- Copy private DNS of 6
+- Paste it in CDH cluster Installation
+- Continue
+- Cluster Installation
+
+Cluster Installation 
+
+- Cluster Installation
+- Continue
+- Install java
+- Java Installation Page
+	- Tick on (Install Oracle Java SE Development Kit (JDK 7)
+- Below that
+	- Tick om (Install Java Unlimited Strength Encryption Policy Files)
+
+In Enter Login Credentials
+- Login To All Hosts As: 
+	- ubuntu
+- Authentication Method:
+	- all user accept same private key
+- Private Key File:
+	- upload private key 
+- Continue
+- Continue
+- Continue
+- Finish
+
+In Cluster Setup
+- Core Hadoop
+- Continue
+
+In Assign Roles
+(Balance Roles between 3 Masters)
+
+- On 2nd Master
+Add following Roles and Remove them From 1st master
+- Hue
+- Oozie
+- Zookeeper
+
+- On 3rd Master
+Add following Roles and Remove them From 1st master
+- Cloudera Management Service add on 3rd master
+- Zookeeper
+
+- Zookeeper must run on all three nodes
+
+- Continue
+- Test Connection
+- Continue
+
+In Cluster Setup
+- HDFS Block Size = 256MB
+- Continue
+- Continue
+- Finish
+
+
+We need 6 node Cluster
+- 3 Master (Cm and 2)
+- 3 Worker
+
+For Windows Instance
+Aws
+- Launch Instance
+- Communuty Amis
+- Select Windows
+- Windows_Server-2012 R-2_RTM-English-64Bit-Base-2018.11.19
+- Compute optimized c4.large
+- Next
+- Next
+- Tag : AD
+- Select Default Security Group
+- Launch
+- Select - Connect
+- Get Password
+- Choose File -
+- Decrypt password
+- Download Remote Desktop File
+- Click on Downloaded file
+- Connect
+- Copy & Paste Password
+- Ok
+- Tick on Dont ask again
+- Yes
+
+Open server manager
+Click on PC Symbol
+
+Add active directory domain services
+- Click on Add roles and features
+- Next
+- Tick → Role based and feature based installation
+- Next
+- Tick →  Select a server from server pool
+- Next
+- Tick → Active directory domain services
+- Add Features
+- Next
+- Next
+- Next
+- Tick → Restart the destination server automatically if required
+- Yes
+- Install
+- Close
+ 
+Configure AD as domain controller
+- Click on Attention Flag (Tick on notifications flag)
+- Click on Promote this server to a domain controller
+- Click on  Add new forest
+Root domain name : hadoop.com
+- Next
+- Set password
+- Next
+- Next
+- Next
+- Next
+- Next
+- Install
+- Close
+It will Restart
+
+Add active directory as certificate service
+
+- We need to install LDAP so hadoop node to connect it to AD
+- Open Downloaded file and Paste Pwd
+- Remember me
+- ok
+- Dont ask
+- Yes
+AD is Configured now
+
+- Open server manager (First Icon)
+- Add roles and features
+- Next
+- Tick on → Role based and feature based installation
+- Next
+- Tick → Select a server from server pool
+- Next
+- Tick on→ Active directory certificate services
+- Add feature
+- Next
+- Next
+- Next
+- In roles and services, select - certification authority
+- Tick on → Restart the destination server automatically if required
+- ok
+- Install
+- Close
+
+- Tick on notifications flag
+- Click on - Configure active directory certificate service on the destination server
+
+- In roles service, Certification Authority
+- Next
+- Enterprice CA
+- Next
+- Root CA
+- Next
+- Create a Private new Key
+- Next
+- Next
+- Next
+- Next
+- Next
+- Configure
+- Close
+
+- Windows Button
+- Restart
+- Other (Planned)
+- Restart
+
+Cloudera
+- Administration
+- Security
+- Unable kerberos
+- See pre-reqvisites Last 2 Steps are remaining
+
+Go To windows Instance (Creating users)
+- Open Downloaded File
+- Connect
+- Start
+- Click on Windows button →Administrative tools
+- Click on Active directory users and computers
+- Right click on hadoop.com → new → organizational unit
+- Adminact
+- Ok
+- Click on admin ect
+- Right Click → new→ user → Give name : cloudera
+- Last name : Cloudera
+- User Login Name : cm_admin
+- Next
+- Password
+- Untick everything
+
+Create another ou
+-  Right click on hadoop.com → new → organisational unit
+- Name : Cloudera
+- Ok
+- Right click on Cloudera → Delegate Control
+- Next
+- Add
+- In Enter the Object names to select : cm_admin
+- Check Names
+- Ok
+- Next
+- Tick on all the Permissions
+- Next
+- Finish
+- Close
+
+Installing kerberos clients and LDAP libraries
+
+- sudo apt-get install ldap-utils
+- sudo apt-get install krb5-user -y
+- HADOOP.COM
+- Give Private DNS of AD instance
+(Enter realm as HADOOP.COM
+ kdc and admin server - private-dns of AD server)
+(AD node Selected)
+
+Perform above two commands on all hosts
+
+Node 2
+- sudo apt-get install ldap-utils
+- sudo apt-get install krb5-user -y
+- HADOOP.COM
+- Give Private DNS of AD instance
+
+Node 3
+- sudo apt-get install ldap-utils
+- sudo apt-get install krb5-user -y
+- HADOOP.COM
+- Give Private DNS of AD instance
+
+Node 4
+- sudo apt-get install ldap-utils
+- sudo apt-get install krb5-user -y
+- HADOOP.COM
+- Give Private DNS of AD instance
+
+Node 5 (CM)
+- sudo apt-get install ldap-utils
+- sudo apt-get install krb5-user -y
+- HADOOP.COM
+- Give Private DNS of AD instance
+
+- sudo nano /etc/krb5.conf
+Hadoop.com
+kdc: Paste DNS of KDC
+
+Node 6
+- sudo apt-get install ldap-utils
+- sudo apt-get install krb5-user -y
+- HADOOP.COM
+- Give Private DNS of AD instance
+
+- Windows Button
+- Restart
+- Other (Planned)
+- Restart
+
+Cloudera
+- Administration
+- Security
+- Unable kerberos
+- Tick on All 4
+- Continue
+- Select on Active Directory
+- KDC Server host : copy & paste Private DNS of AD
+- KDC Admin Server Host : copy & paste Private DNS of AD
+- Active Directory Suffix : ou=cloudera,DC=hadoop,DC=cpm
+- Active Directory Delete Accounts on Credential Regeneration → tick it
+- Continue
+- Manage krb5.conf using cloudera - tick it
+- Continue
+- Username: cm_admin
+- Password
+- Continue
+- Continue
+- Continue
+- Tick Im ready
+- Continue
+- Continue
+- Finish
+
+Windows Instance
+- Open Downloaded file
+- Windows button
+- Administrative tools
+- Active Directory Users and Computers
+- Cloudera
+You can see accounts created by principals.
+
+Terminal
+- Connect From datanode
+- hdfs dfs -ls /
+Shows Error: GSS Exception
+
+Windows Instance
+- Open Downloaded file
+- Windows button
+- Administrative tools
+- Active Directory Users and Computers
+- Right Click on Cloudera → new → user
+- Name : test
+- User Login Name: test
+- Next
+- Password:
+- Untick all
+- Next
+- Finish
+
+Terminal
+- kinit -p test
+pws
+- klist
+- kdestroy
+
+Create HDFS User
+Windows Instance
+- Open Downloaded file
+- Windows button
+- Administrative tools
+- Active Directory Users and Computers
+- Right Click on Cloudera → new → user
+- Name : hdfs
+- User Login Name: hdfs
+- Next
+- Password:
+- Untick all
+- Next
+- Finish
+
+Terminal
+- kinit -p hdfs
+pwd
+- hdfs dfs -ls /
+- hdfs dfs -mkdir /data
+- nano ab
+Write few Lines
+- hdfs dfs -put ab /data
+- hdfs dfs -cat data/ab
+Shows: Data
