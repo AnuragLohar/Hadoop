@@ -1,0 +1,508 @@
+Kerberos  Authorization
+
+User On-boarding / Adding user to a secure Cluster
+- Steps of adding user to secure cluster
+1. Creating PO SIX Account : $add user / user-add on Linux
+2. Creating the principal for the user : $addprinc
+3. Create user space or Home Directory for that user on HDFS :
+4. Changing the ownership of user space / home directory : hdfs dfs -chown uname:gname /user/<uname>
+5. Assigning appropriate permission to users space : hdfs dfs chmod 660 /user/<uname>
+
+AWS
+- EC2
+- Instances
+- Copy id of KDC instance (CMKDC)
+
+Terminal
+- ssh -i prati.pem ubuntu@ipofkdc
+- sudo kadmin.local
+- addprinc userb
+- exit
+
+- sudo kadmin.local
+- addprinc hdfs
+
+Connect to Data node on terminal
+- ssh -i prati.pem ubuntu@ip
+- su hdfs
+Authentication fail because we did not set password
+To Set Password 
+- sudo passwd hdfs
+- sudo adduser hdfs sudo
+- su hdfs
+- cd
+- hdfs dfs -mkdir /user/userb
+(shows errror / exception its name is GSS exception. Its comes when you don't have TGT. And its when you don’t initialize TGT )
+
+Terminal 
+- ssh -i prati.pem ubuntu@ipofkdc
+- sudo kadmin.local
+- addprinc hdfs
+
+- kinit -p hdfs
+- hdfs dfs -mkdir /user/userb
+
+- hdfs dfs -ls /user
+shows  -hdfs have supergroup we don't want that. 
+
+Create sample group
+- sudo addgroupg1
+Shows: drwxr-xr-x   - userb  g1              0 2020-08-31 07:47 /user/userb
+
+Change Ownership 
+- hdfs dfs -chown userb:g1 /user/userb
+- hdfs dfs -ls /user
+Shows : drwxr-xr-x   - userb  g1              0 2020-08-31 07:47 /user/userb
+
+Change permission 
+- hdfs dfs -chmod 664 /user/userb
+- hdfs dfs -ls /user
+check that permission is changed
+Shows: drw-rw-r--   - userb  g1              0 2020-08-31 07:47 /user/userb
+
+Authentication Part is Done.
+
+
+Kerberos Authorization 
+
+- Authorization is defining level of access for an authenticated user.
+- For authorization we have different different things
+1. PO-SIX style permission : Linux style permission (chown,chmod,chgrp)
+2. Extended ACL’s : when you want multiple owners to file or directory , different user having different permission, different group having different permission, multiple group, different groups having different permission then ACL used.
+facl command is used. File Access Control List used with get facl , set facl .
+
+Cloudera Manager
+- HDFS
+- Configuration
+- Search for ACL (by default it is not enable)
+- Enable ACL (tick the check box(set it to true))
+ dfs.namenode.acls.enabled
+- Restart
+- OK
+- Restart
+- Done
+
+
+Terminal (data node on which you perform authorization)
+(if disconnected then connect again and fire – su hdfs )
+(- sudo addgroup dev
+- sudo addgroupg testers)
+
+Create user c
+hdfs dfs -mkdir -p /data/userc
+- hdfs dfs -ls /data
+it goes to supergroup
+
+Change Ownership
+hdfs dfs -chown userc:dev /data/userc
+- hdfs dfs -ls /data
+drwxr-xr-x   - userc dev          0 2020-08-31 08:09 /data/userc
+
+Get facl is for getting facl entries
+- hdfs dfs -getfacl /data/userc
+Output is shown in different format
+
+Set facl is used to set facl
+- hdfs dfs -setfacl -m user:usera:r-x /data/userc
+user: usrname: permissions
+user:usera:read(R)-Execute(x)
+Dosnt show anything
+- hdfs dfs -setfacl -m group:testers:rwx /data/userc 
+Dosnt show anything
+
+- hdfs dfs -getfacl /data/userc
+Shows : # file: /data/userc
+# owner: userc
+# group: dev
+user::rwx
+user:usera:r-x
+group::r-x
+group:testers:rwx
+mask::rwx
+other::r-x
+
+You can see extra entries here. 1 file have two owners with different permissions.
+This is solution for earlier problem. 
+It shows Mask.
+
+
+Mask : Mask specifies most open permission or least restricted permission.
+If mask comes means ACL is set.
+
+- hdfs dfs -ls /data
+Shows : drwxrwxr-x+  - userc dev          0 2020-08-31 08:09 /data/userc
+It shows + at the end of x.
+If + shows means ACL is set.
+
+- hdfs dfs -chmod 750 /data/userc
+- hdfs dfs -getfacl /data/userc
+
+Shows: # file: /data/userc
+# owner: userc
+# group: dev
+user::rwx
+user:usera:r-x
+group::r-x
+group:testers:rwx		#effective:r-x
+mask::r-x
+other::---
+
+On tester we give 7(rwx) permission but it shows 5(rx)
+chmod command is dominant over ACL command.
+Mask has also change.
+
+Remove FACL
+- hdfs dfs -setfacl -b /data/userc
+Verify
+-hdfs dfs -getfacl /data/userc
+Mask has been removed
+
+- hdfs dfs -ls /data
++ sign has gone.
+
+Explaination of above command
+setfacl command and its options
+hdfs dfs -setfacl [-R] [-b|-k -m|-x <acl_spec> <path>]|[--set <acl_spec> <path>]
+<!-- COMMAND OPTIONS
+<path>: Path to the file or directory for which ACLs should be set.
+-R: Use this option to recursively list ACLs for all files and directories.
+-b: Revoke all permissions except the base ACLs for user, groups and others.
+-k: Remove the default ACL.
+-m: Add new permissions to the ACL with this option. Does not affect existing permissions.
+-x: Remove only the ACL specified.
+<acl_spec>: Comma-separated list of ACL permissions.
+--set: Use this option to completely replace the existing ACL for the path specified. 
+       Previous ACL entries will no longer apply.
+-->
+
+We have R, W, X permission.
+W have three meaning : Creation, Deletion, Modify.
+If you want a share file with everyone but you want to make sure that other don't delete it then sticky bits used.
+They can Create or Edit(modify) but can not delete content from file
+If you want this then enable sticky bits. Used in Logs, Collaborative coding. 
+
+Enabling sticky bits
+
+- hdfs dfs -chmod +t /data
+To Check
+- hdfs dfs -ls / | grep data
+Shows: drwxr-xr-t   - hdfs supergroup          0 2020-08-31 08:09 /data
+t shows after permissions. 
+Means sticky bit is enable
+
+- hdfs dfs -ls /user
+Shows : drwxrwxrwx   - mapred hadoop              0 2020-08-31 06:14 /user/history
+drwxrwxr-t   - hive   hive                0 2020-08-31 06:16 /user/hive
+drwxrwxr-x   - hue    hue                 0 2020-08-31 06:17 /user/hue
+drwxrwxr-x   - oozie  oozie               0 2020-08-31 06:17 /user/oozie
+drw-rw-r--   - userb  g1                  0 2020-08-31 07:47 /user/userb
+
+It already have t on Hive
+
+
+	Apache Sentry
+
+- HIVE, Kafka like services also need authorization, This services run on top of HDFS for giving  authorization to this services sentry is used.
+
+- Apache sentry provides fine grained role based Access Control for services run on top of HDFS.
+- Hive, kafka, solar, Impala, Hbase
+- Any service who wants to take authorization services from Sentry then they need to create Sentry Binding.
+- Once sentry binding is created then the authorization control will given to sentry and then sentry run something called as a Policy Engine in background to determine the permission.
+- This permission are stored in Policy Database.
+Policy Engine → Permission → Policy Database
+
+
+Poly 
+Engine
+
+
+Kafka
+Sentry Binding
+
+
+
+
+
+
+Client
+
+
+Hive
+Sentry Binding
+
+Poly
+DataBase
+Poly
+Data
+Base
+
+
+
+
+
+
+
+Concept of Sentry:
+
+User : Normal user who need authorization.
+Group:  Collection of user having same authorization needs.
+Object : One on which you need permission. Hive → table, Kafka → topic.
+Privilege: Level of access, permission for the object. 
+For Hive we follow SQL → SELECT, INSERT, ALL
+Role: Collection of privilege.
+
+Relationship between this 4 : Strict relationship
+
+User → Group → Role → Privilege
+
+User will always be present in group.
+Group will always be assign role.
+Role will always contain privilege.
+Multiplexing can happen.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Sentry Model for Hive:
+
+Client
+Connection
+
+
+HS2
+
+Read , Write Protection
+JDBC, ODBC, 
+Hive, Beeline
+
+      
+
+
+
+HMS
+
+
+Sentry Write Protection
+Database
+
+
+
+Hcatalog
+
+
+
+
+Sentry
+
+In KDC add principal for hive
+
+- login to KDC
+- ssh -i prati.pem ubuntu@ipofcmkdc
+- sudo kadmin.local
+- addprinc hive
+- Set password
+- exit
+
+
+Go to any node
+- ssh -i prati.pem ubuntu@ipofdatanode
+- kinit -p userb
+- Password
+- klist
+
+- beeline
+beeline> !connect 
+jdbc:hive2://DNS_of_Hive_Server_2:10000/default;principal=hive/DNS_of_Hive_Server_2@HADOOP.COM
+
+!connect jdbc:hive2://ip-172-31-50-33.ec2.internal:10000/default;principal=hive/ip-172-31-50-33.ec2.internal@HADOOP.COM 
+DNS_of_Hive_Server_2 = take it from Cloudera
+
+Shows Connected
+
+- create database database1;
+- show databases; 
+- drop database database1;
+
+- create table test(a string);
+- drop table test;
+
+-  su hdfs
+- Password
+- cd
+- klist
+- kdestroy
+- klist
+
+## Locking down hive warehouse directory
+Change ownership and permission
+- hdfs dfs -chown -R hive:hive /user/hive/warehouse
+- hdfs dfs -chmod -R 0771 /user/hive/warehouse
+
+## Configuring sentry service for authorization
+
+Cloudera
+- Besides cluster name click on arrow button
+- Add service sentry
+- Select senrty
+- Continue
+- Select host
+	Specify Server : CM
+	Gateway : 
+- Continue
+- Set Data Base : Test Connection
+- Next
+- Finish
+
+Sentry for Hive
+- Hive
+- Configuration
+- Search Sentry
+- Select Sentry
+- Save Changes
+- Shows Error (Hive Impersonation)
+
+we are connected from Beeline and we fire SQL query from beeline.
+Query goes to HS2. Query starts map reduce in background it goes to yarn.
+
+Kazi connects to HS2 with username kazi.
+but HS2 sends job to yarn using own username Hive.
+Actually query submitted by kazi but hive submitted job with hive username, its called  Impersonation.
+
+
+
+
+HS2
+
+Sentry 
+Read Protection
+
+
+(SQL Query)							( Map Reduce )
+
+
+
+- Search Impersonation
+- Disable
+- Save
+- Restart
+- Save Changes
+- Finish
+
+Terminal
+- ssh -i prati.pem ubunru@ipofdatanode
+- kinit -p userb
+- beeline
+!connect jdbc:hive2://ip-172-31-50-33.ec2.internal:10000/default;principal=hive/ip-172-31-50-33.ec2.internal@HADOOP.COM 
+
+- show databases;
+- show tables;
+Shows: No rows selected (0.191 seconds)
+Dosnt show table means sentry is working. Read protection is enable
+
+- create database prati;
+Shows: Error: Error while compiling statement: FAILED: SemanticException No valid privileges
+ User userb does not have privileges for CREATEDATABASE
+Means Sentry write protection is enable  
+
+- kdestroy
+- klist
+- kinit -p hive
+
+- beeline
+!connect jdbc:hive2://ip-172-31-50-33.ec2.internal:10000/default;principal=hive/ip-172-31-50-33.ec2.internal@HADOOP.COM 
+- show databases;
+- show tables;
+Dosnt show tables because Sentry is intrinsic Secure. 
+
+- create role admin_role;
+
+- Hive or HDFS can only be admin if you want then go to  cloudeera and add it to super group.
+Sentry refers  hive as Server 1
+
+This is One Time for admin user
+- grant all on server server1 to role admin_role;
+- grant all on database default to role admin_role; (assigning privilege to role)
+- grant role admin_role to group hive; (role → group)
+- show tables;
+Now it shows test table.
+
+for other users to add
+- create table test(a string);
+- create table sample1(name string, phone int);
+- create table sample2(name string, phone int);
+
+- create role analyst;
+
+- grant select on table sample1 to role analyst;
+permission : Select insert all
+object : table (sample1)
+
+assign role to group
+- grant role analyst to group userb;
+
+
+- create role developer;
+- grant select on sample2 to role developer;
+- grant role developer to group user2;
+
+Cloudera
+- Hue
+- Web UI
+- Hue
+-  admin
+-  admin
+- Query Editor
+- Hive
+- Will not show table because its not authorized.
+
+Create User
+- Click on Admin
+- Manage Users
+- Add user
+-  userb
+- Password
+- Next
+- Next
+-  Add user
+
+Create User
+- Add user
+-  user2
+- Password
+- Next
+- Next
+-  Add user
+
+Create User
+- Add user
+-  hive
+- Password
+- Next
+- Next
+- Tick Super User Status
+-  Add user
+
+- Logout
+- Try logging in as userb
+- select * from sample1;
+- insert into table sample1 values (‘abc’,123);
+show error means read write protection is working
